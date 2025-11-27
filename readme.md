@@ -1,5 +1,7 @@
 сделать
-- 4 функции в collector.cpp
++ 4 функции в collector.cpp
+
+- обёртка в commands.h для строк 60-64, 70-73
 
 
 

@@ -37,17 +37,30 @@ struct Message {
     };
 
     struct SimplePCReport {
-        CPU cpu;
-        RAM ram;
-        OS system;
         vector<Disk> disks;
+        RAM ram;
+        CPU cpu;
+        OS system;
     };
 
     Header header;
+    SimplePCReport payload;
     // auto* message; // сам должен определить тип данных
 };
 
 struct Settings {
     int idle_time;  // как часто отправлять данные
     string server;  // ip или dns адрес сервера куда отправлять
-};
+}
+/*
+{
+    header: {"agent_id": 23123, },
+    payload: {
+        "disks": [],
+        "ram" : {},
+        "cpu" : {},
+        "system" : {},
+    }
+}
+
+*/
