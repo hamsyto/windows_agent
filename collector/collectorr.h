@@ -1,4 +1,4 @@
-// collector.cpp
+// collectorr.h
 
 // CPU (комплекснмя, где-то вероятно придётся использтвать sleep(wait))
 // RAM
@@ -17,15 +17,16 @@
 #include <vector>
 
 #include "commands.h"
-#include "windows_simple_message.h"
+#include "../models/windows_simple_message.h"
 using namespace std;
 
+Disk FillDiskInfo(int diskIndex);
 vector<Disk> GetDisks();
 RAM GetRam();
 CPU GetCpu();
 OS GetOs();
 
-// === заполняет структуру Disk для одного физического диска ===
+// заполняет структуру Disk для одного физического диска
 Disk FillDiskInfo(int diskIndex) {
     Disk disk = {};
     disk.is_hdd = IsHDD(diskIndex);
@@ -78,7 +79,7 @@ Disk FillDiskInfo(int diskIndex) {
     return disk;
 }
 
-// === находит все физические диски и собирает вектор ===
+// находит все физические диски и собирает вектор
 vector<Disk> GetDisks() {
     vector<Disk> disks;
 
@@ -168,9 +169,6 @@ OS GetOs() {
     return osys;
 }
 
-//\/\/\/\/\/\/\\/\/\/ в этот файл не входит
-//\/\/\/\/\/\/\\/\/\/\/\/\/\/\//\\/\/\/\//
-
 Message GetMess() {
     Message mess = {};
 
@@ -184,5 +182,3 @@ Message GetMess() {
 
     return mess;
 }
-
-const char messs(Message mess) { /*mess.*/ ; }
