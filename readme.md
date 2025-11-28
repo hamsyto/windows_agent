@@ -5,6 +5,10 @@
 
 
 
+   // си-стиль: (struct sockaddr*)&addr;
+    // си++ -стиль: reinterpret_cast<struct sockaddr*>(&addr);  static_cast,
+    // const_cast
+    // struct sockaddr* pAddr = reinterpret_cast<struct sockaddr*>(&addr);
 
 
 

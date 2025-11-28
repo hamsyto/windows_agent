@@ -1,23 +1,13 @@
-// исключает малоиспользуемые части Windows API (устаревшие функции, редко
-// используемые компоненты, макросы и структуры, которые не нужны в большинстве
-// современных приложений): ускоряет компиляцию, подключение библиотек виндовс
-// будет занимать меньше места и памяти нужен только с <winsock.h>, тк там много
-// "лишнего"
-// #define WIN32_LEAN_AND_MEAN
-
-// для inet_ntop - IPv6
-// #define _WIN32_WINNT 0x0600
-// #include <ws2tcpip.h>
-
-// масщтабный заголовок.    сам определяет #define WIN32_LEAN_AND_MEAN
+// main.cpp
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
 
 #include <atomic>
 #include <iostream>
 #include <thread>
 
-#include "commands.h"
+#include "commands_main.h"
 #include "const.h"
+#include "transport/transport.h"
 using namespace std;
 
 SOCKET InitConnectSocket();
@@ -59,11 +49,10 @@ int main() {
 
         if (disconnected) continue;  // проверка на отключение перед отправкой
 
+        Message msg = GetMess();
+        string jsonStr = msg.toJson();  // без отступов: j.dump()
 
-
-
-        
-        SendMessageAndMessageSize(message, connect_socket);
+        SendMessageAndMessageSize(connect_socket, jsonStr);
     }
 
     // освобождение ресурсов Winsock
@@ -84,13 +73,9 @@ SOCKET InitConnectSocket() {
 void ConnectServer(SOCKET connect_socket) {
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(kPort);  // преобразует 16-битное число в сетевой порядок
+    addr.sin_port =
+        htons(kPort);  // преобразует 16-битное число в сетевой порядок
     addr.sin_addr.s_addr = inet_addr(kIpAddr);  //
-
-    // си-стиль: (struct sockaddr*)&addr;
-    // си++ -стиль: reinterpret_cast<struct sockaddr*>(&addr);  static_cast,
-    // const_cast
-    // struct sockaddr* pAddr = reinterpret_cast<struct sockaddr*>(&addr);
 
     if (connect(connect_socket, reinterpret_cast<struct sockaddr*>(&addr),
                 sizeof(addr)) != 0) {

@@ -41,30 +41,27 @@ void close_socket_check(SOCKET& sck) {
     sck = INVALID_SOCKET;
 }
 
-void SendMessageAndMessageSize(string& message, SOCKET& client_socket) {
-    if ((message.size()) > kMaxBuf) {
+void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
+    if ((jsonStr.size()) > kMaxBuf) {
         cout << "Message length exceeds the allowed sending length. Message "
                 "cannot be sent."
              << endl;
         return;
     }
-    uint32_t size_message = message.size();
-    char char_size_message[kNumChar];
 
-    // почему данное копирование уместно?
-    // в клиенте при получении char преобразовывается обратно в int, а значит не
-    // важно как компилятор читает char из памяти, важно, чтобы оно
-    // соответствовало отправленному int
-    memcpy(&char_size_message, &size_message, kNumChar);
-    if (send(client_socket, char_size_message, kNumChar, 0) == SOCKET_ERROR) {
+    // 1. Подготовка длины (в network byte order)
+    uint32_t len = static_cast<uint32_t>(jsonStr.size());
+    uint32_t lenNetwork = htonl(len); // host → network (big-endian)
+
+    // 2. Отправка длины
+    if (send(client_socket, reinterpret_cast<const char*>(&lenNetwork), sizeof(lenNetwork), 0) == SOCKET_ERROR) {
         cout << "send(char_size_message) failed with error: "
              << WSAGetLastError() << endl;
         return;
     }
 
-    // строка будет завершена \0
-    const char* char_message = message.c_str();
-    if (send(client_socket, char_message, size_message, 0) == SOCKET_ERROR) {
+
+    if (send(client_socket, jsonStr.c_str(), (int)jsonStr.size(), 0) == SOCKET_ERROR) {
         cout << "send() failed with error: " << WSAGetLastError() << endl;
         return;
     }

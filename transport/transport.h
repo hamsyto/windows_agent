@@ -1,9 +1,12 @@
+// transport.h
+
 // Функция 1 которая получает на вход сообщение и сериализует его для отправки
 // Функция 2, которая получает на вход сокет и сообщение, сереализует с помощью
 // функции 1 и отправляет в сокет.
 #include <VersionHelpers.h>
 #include <windows.h>
 #include <winioctl.h>
+#include <winbase.h>
 
 #include <cstdint>
 #include <iostream>
@@ -12,13 +15,9 @@
 #include <vector>
 
 #include "../collector/collectorr.h"
-
-#include "nlohmann/json.hpp"  // или "#include <nlohmann/json.hpp>"
 using json = nlohmann::json;
 
-
 using namespace std;
-
 
 Message GetMess() {
     Message mess = {};
@@ -34,44 +33,32 @@ Message GetMess() {
     return mess;
 }
 
-/*
-Message msg = GetMess();
-string json_str = msg.toJson();
-// Отправка через TCP сокет
-int bytes_sent = send(sockfd, json_str.c_str(), static_cast<int>(json_str.size()), 0);
-if (bytes_sent == SOCKET_ERROR) {
-    // обработка ошибки
-}
-*/
-
 string Message::toJson() const {
     json j;
+
+    // Заголовок
     j["header"] = {
         {"agent_id", header.agent_id},
-        {"type", string(header.type)}
+        {"type", string(header.type)}  // char[64] → string
     };
+
     j["payload"] = {
-        {"ram", {
-            {"total_mb", payload.ram.total_mb},
-            {"free_mb", payload.ram.free_mb}
-        }},
-        {"cpu", {
-            {"cores", payload.cpu.cores},
-            {"usage", payload.cpu.usage}
-        }},
-        {"system", {
-            {"hostname", payload.system.hostname},
-            {"version", payload.system.version},
-            {"timestamp", payload.system.timestamp}
-        }},
-        {"disks", json::array()}
-    };
+        {"ram",
+         {{"total_mb", payload.ram.total_mb},
+          {"free_mb", payload.ram.free_mb}}},
+        {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
+        {"system",
+         {{"hostname", payload.system.hostname},
+          {"version", payload.system.version},
+          {"timestamp", payload.system.timestamp}}},
+        {"disks", json::array()}};
+
+    // Диски
     for (const auto& disk : payload.disks) {
-        j["payload"]["disks"].push_back({
-            {"total_mb", disk.total_mb},
-            {"free_mb", disk.free_mb},
-            {"is_hdd", disk.is_hdd}
-        });
+        j["payload"]["disks"].push_back({{"total_mb", disk.total_mb},
+                                         {"free_mb", disk.free_mb},
+                                         {"is_hdd", disk.is_hdd}});
     }
-    return j.dump(2); // с отступами
+
+    return j.dump(2);
 }

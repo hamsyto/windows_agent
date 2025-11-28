@@ -55,16 +55,3 @@ struct Settings {
     int idle_time;  // как часто отправлять данные
     string server;  // ip или dns адрес сервера куда отправлять
 };
-
-/*
-формат содержимого .json
-{
-    header: {"agent_id": 23123, },
-    payload: {
-        "disks": [],
-        "ram" : {},
-        "cpu" : {},
-        "system" : {},
-    }
-}
-*/
