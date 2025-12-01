@@ -114,6 +114,15 @@
     "condition_variable": "cpp",
     "iomanip": "cpp",
     "mutex": "cpp",
-    "sstream": "cpp"
+    "sstream": "cpp",
+    "any": "cpp",
+    "codecvt": "cpp",
+    "cstring": "cpp",
+    "forward_list": "cpp",
+    "map": "cpp",
+    "unordered_set": "cpp",
+    "fstream": "cpp",
+    "ranges": "cpp",
+    "valarray": "cpp"
   }
 }

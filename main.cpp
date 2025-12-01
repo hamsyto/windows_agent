@@ -6,21 +6,23 @@
 #include <thread>
 
 #include "commands_main.h"
-#include "const.h"
-#include "transport/transport.h"
 using namespace std;
 
 SOCKET InitConnectSocket();
 void ConnectServer(SOCKET connect_socket);
-void RecvMessage(SOCKET connect_socket, atomic<bool>& disconnected);
+void RecvMessage(SOCKET connect_socket, string& str_message, atomic<bool>& disconnected);
 
 atomic<bool> disconnected{true};
+mutex message_mutex;
 
 int main() {
     if (WinsockInit() != 0) return 1;
 
     SOCKET connect_socket = INVALID_SOCKET;
     thread recv_thread;
+    Message msg = {};
+    msg.header.agent_id = 0;
+    string str_message;
 
     while (true) {
         if (disconnected) {
@@ -42,16 +44,27 @@ int main() {
                 close_socket_check(connect_socket);
                 continue;
             }
-
             recv_thread =
-                thread(RecvMessage, connect_socket, ref(disconnected));
+                thread(RecvMessage, connect_socket, ref(str_message), ref(disconnected));
         }
+        int id;
+        {
+            lock_guard<mutex> lock(message_mutex);
+            id = stoi(str_message);
+        }
+        
+        if (id > 0) {
+            msg.header.agent_id = id; // полученно от сервера
+        }
+
+        msg = GetMess(msg);
+        string jsonStr = msg.toJson();  // без отступов: j.dump()
 
         if (disconnected) continue;  // проверка на отключение перед отправкой
 
-        Message msg = GetMess();
-        string jsonStr = msg.toJson();  // без отступов: j.dump()
-
+        Settings ser = {};
+        if (!load_env_settings(ser)) return 1;
+        Sleep(ser.idle_time);
         SendMessageAndMessageSize(connect_socket, jsonStr);
     }
 
@@ -71,11 +84,13 @@ SOCKET InitConnectSocket() {
 }
 
 void ConnectServer(SOCKET connect_socket) {
+    Settings ser = {};
+    if (!load_env_settings(ser)) return;
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port =
-        htons(kPort);  // преобразует 16-битное число в сетевой порядок
-    addr.sin_addr.s_addr = inet_addr(kIpAddr);  //
+        htons(ser.port_server);  // преобразует 16-битное число в сетевой порядок
+    addr.sin_addr.s_addr = inet_addr(ser.ip_server.c_str());  //
 
     if (connect(connect_socket, reinterpret_cast<struct sockaddr*>(&addr),
                 sizeof(addr)) != 0) {
@@ -87,29 +102,20 @@ void ConnectServer(SOCKET connect_socket) {
     disconnected = false;
 }
 
-void RecvMessage(SOCKET connect_socket, atomic<bool>& disconnected) {
+void RecvMessage(SOCKET connect_socket, string& str_message, atomic<bool>& disconnected) {
     while (!disconnected) {
-        char char_size_message[kNumChar];
-        int result = recv(connect_socket, char_size_message, kNumChar, 0);
-        if (result < 1) {
-            cout << "Connection closed. Press ENTER to reconnect." << endl;
-            disconnected = true;
-            return;
-        }
-
-        uint32_t size_message = 0;
-        // memcpy копирует байты
-        memcpy(&size_message, &char_size_message, kNumChar);
-
-        char char_message[size_message];
-
-        result = recv(connect_socket, char_message, size_message, 0);
-        if (result < 1) {
+        char buf[kMaxBuf];
+        if ((recv(connect_socket, buf, kMaxBuf, 0)) < 1) {
             cout << "Connection closed." << endl;
             disconnected = true;
             return;
         }
-        string message(char_message, size_message);
+        string message(buf, kMaxBuf);
+        {
+            lock_guard<std::mutex> lock(message_mutex);
+            str_message = message;
+        }
+        
         cout << "Server:" << endl << message << endl;
     }
 }
