@@ -1,3 +1,6 @@
+#ifndef WINDOWS_SIMPLE_MESSAGE_H
+#define WINDOWS_SIMPLE_MESSAGE_H
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -57,3 +60,5 @@ struct Settings {
     string ip_server;  // ip или dns адрес сервера куда отправлять
     int port_server;
 };
+
+#endif

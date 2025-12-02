@@ -3,6 +3,10 @@
 // Функция 1 которая получает на вход сообщение и сериализует его для отправки
 // Функция 2, которая получает на вход сокет и сообщение, сереализует с помощью
 // функции 1 и отправляет в сокет.
+
+#ifndef TRANSPORT_H
+#define TRANSPORT_H
+
 #include <VersionHelpers.h>
 #include <winbase.h>
 #include <windows.h>
@@ -15,6 +19,7 @@
 #include <vector>
 
 #include "../collector/collectorr.h"
+#include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
 using namespace std;
@@ -78,3 +83,5 @@ string Message::toJson() const {
 
     return j.dump();
 }
+
+#endif 

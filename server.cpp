@@ -1,24 +1,34 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
-#include <iostream>
-#include <fstream>
-#include <string>
+
+#include <array>
 #include <atomic>
-#include <thread>
+#include <cstdint>
+#include <fstream>
+#include <iostream>
 #include <mutex>
+#ifdef _WIN32
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <arpa/inet.h>  // htonl
+#endif
+#include <string>
+#include <thread>
 
 using namespace std;
 
 #pragma comment(lib, "ws2_32.lib")
 
+array<char, 4> int32_to_network_bytes(int32_t value);
+
 // Конфигурация (можно вынести в const.h)
 constexpr const char* kIpAddr = "127.0.0.1";
-constexpr int kPort = 8117;
+constexpr int kPort = 8101;
 constexpr int kQueue = 3;
 
 std::atomic<int> g_reportCounter{0};
-std::mutex g_fileMutex; // для потокобезопасного счёта
+std::mutex g_fileMutex;  // для потокобезопасного счёта
 
 // Генерация имени файла: report_001.json, report_002.json, ...
 std::string GenerateFilename() {
@@ -49,7 +59,8 @@ void HandleClient(SOCKET clientSocket) {
     while (true) {
         // 1. Читаем 4 байта — длина JSON (в network byte order)
         uint32_t lenNetwork = 0;
-        int bytes = recv(clientSocket, reinterpret_cast<char*>(&lenNetwork), sizeof(lenNetwork), 0);
+        int bytes = recv(clientSocket, reinterpret_cast<char*>(&lenNetwork),
+                         sizeof(lenNetwork), 0);
         if (bytes <= 0) {
             std::cout << "Client disconnected." << std::endl;
             break;
@@ -61,7 +72,7 @@ void HandleClient(SOCKET clientSocket) {
 
         // 2. Преобразуем длину в host byte order
         uint32_t len = ntohl(lenNetwork);
-        if (len == 0 || len > 1024 * 1024) { // защита от переполнения
+        if (len == 0 || len > 1024 * 1024) {  // защита от переполнения
             std::cerr << "Invalid JSON length: " << len << std::endl;
             break;
         }
@@ -70,9 +81,11 @@ void HandleClient(SOCKET clientSocket) {
         std::string jsonStr(len, '\0');
         int totalRecv = 0;
         while (totalRecv < static_cast<int>(len)) {
-            int result = recv(clientSocket, &jsonStr[totalRecv], len - totalRecv, 0);
+            int result =
+                recv(clientSocket, &jsonStr[totalRecv], len - totalRecv, 0);
             if (result <= 0) {
-                std::cerr << "Connection broken during JSON receive." << std::endl;
+                std::cerr << "Connection broken during JSON receive."
+                          << std::endl;
                 closesocket(clientSocket);
                 return;
             }
@@ -107,7 +120,8 @@ int main() {
     addr.sin_port = htons(kPort);
     addr.sin_addr.s_addr = inet_addr(kIpAddr);
 
-    if (bind(listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+    if (bind(listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) ==
+        SOCKET_ERROR) {
         std::cerr << "bind() failed." << std::endl;
         closesocket(listenSocket);
         WSACleanup();
@@ -133,8 +147,10 @@ int main() {
         }
 
         std::cout << "Client connected." << std::endl;
-
-        // Обработка клиента в отдельном потоке (упрощённо — без управления потоками)
+        auto buffer = int32_to_network_bytes(10);
+        send(clientSocket, buffer.data(), buffer.size(), 0);
+        // Обработка клиента в отдельном потоке (упрощённо — без управления
+        // потоками)
         thread(HandleClient, clientSocket).detach();
     }
 
@@ -142,4 +158,11 @@ int main() {
     closesocket(listenSocket);
     WSACleanup();
     return 0;
+}
+
+array<char, 4> int32_to_network_bytes(int32_t value) {
+    uint32_t net_val = htonl(static_cast<uint32_t>(value));
+    std::array<char, 4> buffer;
+    memcpy(buffer.data(), &net_val, sizeof(net_val));
+    return buffer;
 }
