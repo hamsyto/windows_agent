@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "d:/projects/cpp/multi_threaded_chat/src",
-      "program": "d:/projects/cpp/multi_threaded_chat/src/build/Debug/outDebug",
+      "cwd": "d:/projects/cpp/windows_agent",
+      "program": "d:/projects/cpp/windows_agent/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

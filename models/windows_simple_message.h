@@ -22,6 +22,7 @@ struct CPU {
 
 struct OS {
     string hostname;
+    string domain;  // WORKGROUP
     string version;
     int timestamp;  // время в формате timestamp
 };

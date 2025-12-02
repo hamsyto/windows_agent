@@ -14,7 +14,7 @@ using namespace std;
 
 // Конфигурация (можно вынести в const.h)
 constexpr const char* kIpAddr = "127.0.0.1";
-constexpr int kPort = 1117;
+constexpr int kPort = 8117;
 constexpr int kQueue = 3;
 
 std::atomic<int> g_reportCounter{0};

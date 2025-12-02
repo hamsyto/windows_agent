@@ -4,9 +4,9 @@
 // Функция 2, которая получает на вход сокет и сообщение, сереализует с помощью
 // функции 1 и отправляет в сокет.
 #include <VersionHelpers.h>
+#include <winbase.h>
 #include <windows.h>
 #include <winioctl.h>
-#include <winbase.h>
 
 #include <cstdint>
 #include <iostream>
@@ -24,9 +24,9 @@ Message GetMess(Message& mess) {
 
     if (mess.header.agent_id == 0) {
         strcpy_s(mess.header.type, "whoami");
-        return mess;
+    } else {
+        strcpy_s(mess.header.type, "SimplePCReport");
     }
-    strcpy_s(mess.header.type, "SimplePCReport");
 
     mess.payload.disks = GetDisks();
     mess.payload.ram = GetRam();
@@ -36,41 +36,45 @@ Message GetMess(Message& mess) {
     return mess;
 }
 
-string Message::toJson() const
-{
+string Message::toJson() const {
     json j;
+    /*string agent_id_json;
+        if (header.agent_id > 0) {
+            agent_id_json = to_string(header.agent_id);
+        } else {
+            agent_id_json = "null";
+        } */
 
     // Заголовок
     j["header"] = {
         {"agent_id", header.agent_id},
-        {"type", string(header.type)} // char[64] → string
+        {"type", string(header.type)}  // char[64] → string
     };
 
     // Для "whoami" — пустой payload
+    /*
     if (string(header.type) == "whoami") {
-        j["payload"] = json::object(); // пустой словарь
+        j["payload"] = json::object();  // пустой словарь
         return j.dump();
     }
-    if (string(header.type) == "SimplePCReport") {
-        j["payload"] = {
-            {"ram",
-             {{"total_mb", payload.ram.total_mb},
-              {"free_mb", payload.ram.free_mb}}},
-            {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
-            {"system",
-             {{"hostname", payload.system.hostname},
-              {"version", payload.system.version},
-              {"timestamp", payload.system.timestamp}}},
-            {"disks", json::array()}};
+    if (string(header.type) == "SimplePCReport") {*/
+    j["payload"] = {
+        {"ram",
+         {{"total_mb", payload.ram.total_mb},
+          {"free_mb", payload.ram.free_mb}}},
+        {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
+        {"system",
+         {{"hostname", payload.system.hostname},
+          {"version", payload.system.version},
+          {"timestamp", payload.system.timestamp}}},
+        {"disks", json::array()}};
 
-        // Диски
-        for (const auto &disk : payload.disks)
-        {
-            j["payload"]["disks"].push_back({{"total_mb", disk.total_mb},
-                                             {"free_mb", disk.free_mb},
-                                             {"is_hdd", disk.is_hdd}});
-        }
-        return j.dump();
+    // Диски
+    for (const auto& disk : payload.disks) {
+        j["payload"]["disks"].push_back({{"total_mb", disk.total_mb},
+                                         {"free_mb", disk.free_mb},
+                                         {"is_hdd", disk.is_hdd}});
     }
+
     return j.dump();
 }
