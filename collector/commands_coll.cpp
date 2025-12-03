@@ -2,8 +2,9 @@
 
 // === КРИТИЧЕСКИ ВАЖНО: именно такой порядок ===
 #define _WIN32_WINNT 0x0601
-#include <winsock2.h> 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
 
 // === Обход для NET_API_STATUS в MinGW UCRT64 ===
@@ -13,24 +14,32 @@ typedef DWORD NET_API_STATUS;
 #endif
 
 // === Заголовки NetAPI ===
-#include <lmerr.h>        // определяет NERR_Success (как DWORD)
-#include <lmapibuf.h>     // объявляет NetApiBufferFree
-#include <lmjoin.h>       // объявляет NetGetJoinInformation
+#include <lmapibuf.h>  // объявляет NetApiBufferFree
+#include <lmerr.h>     // определяет NERR_Success (как DWORD)
+#include <lmjoin.h>    // объявляет NetGetJoinInformation
 
 // === Другие заголовки ===
 #include <VersionHelpers.h>
+#include <Wbemidl.h>
+#include <intrin.h>    // для __cpuid
+#include <iphlpapi.h>  // для GetAdaptersAddresses
 #include <winioctl.h>
+
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
-
+ /*
+#pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+*/
 #include "commands_coll.h"
-#include "../transport/nlohmann/json.hpp"
 
 using namespace std;
 
@@ -39,6 +48,7 @@ Disk FillDiskInfo(int diskIndex) {
     disk.is_hdd = IsHDD(diskIndex);
     disk.total_mb =
         static_cast<double>(GetPhysicalDiskSize(diskIndex)) / (1024.0 * 1024.0);
+    disk.total_mb = round(disk.total_mb * 100.0) / 100.0;
 
     ULONGLONG totalFree = 0;
     unordered_set<string> processed;
@@ -132,6 +142,7 @@ Disk FillDiskInfo(int diskIndex) {
     }
 
     disk.free_mb = static_cast<double>(totalFree) / (1024.0 * 1024.0);
+    disk.free_mb = round(disk.free_mb * 100.0) / 100.0;
     return disk;
 }
 
@@ -253,17 +264,17 @@ string get_computer_domain_or_workgroup() {
                               &joinStatus   // тип присоединения
         );
 
-    std::string result;
+    string result;
     if (status == NERR_Success && domainName != nullptr) {
-        // Преобразуем из UTF-16 (wchar_t*) в std::string (ANSI/UTF-8)
+        // Преобразуем из UTF-16 (wchar_t*) в string (ANSI/UTF-8)
         // Используем простой способ через WideCharToMultiByte (ANSI)
         int len = WideCharToMultiByte(CP_ACP, 0, domainName, -1, nullptr, 0,
                                       nullptr, nullptr);
         if (len > 0) {
-            std::string temp(len - 1, '\0');  // -1 чтобы исключить \0
+            string temp(len - 1, '\0');  // -1 чтобы исключить \0
             WideCharToMultiByte(CP_ACP, 0, domainName, -1, &temp[0], len,
                                 nullptr, nullptr);
-            result = std::move(temp);
+            result = move(temp);
         }
         NetApiBufferFree(domainName);  // обязательно освободить
     }
@@ -323,3 +334,182 @@ double GetCPUUsage() {
 
     return usage;  // или (usage1 + usage2) / 2 для сглаживания
 }
+
+vector<string> getMacAddresses() {
+    vector<string> macList;
+
+    ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST |
+                  GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_FRIENDLY_NAME;
+
+    ULONG size = 0;
+    // Узнаём нужный размер буфера
+    if (GetAdaptersAddresses(AF_UNSPEC, flags, nullptr, nullptr, &size) !=
+        ERROR_BUFFER_OVERFLOW) {
+        return macList;  // нет адаптеров или ошибка
+    }
+
+    vector<BYTE> buffer(size);
+    PIP_ADAPTER_ADDRESSES adapters =
+        reinterpret_cast<PIP_ADAPTER_ADDRESSES>(buffer.data());
+
+    if (GetAdaptersAddresses(AF_UNSPEC, flags, nullptr, adapters, &size) !=
+        NO_ERROR) {
+        return macList;
+    }
+
+    PIP_ADAPTER_ADDRESSES adapter = adapters;
+    while (adapter) {
+        // Пропускаем loopback и адаптеры без MAC
+        if (adapter->PhysicalAddressLength == 6 &&
+            adapter->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
+            char mac[18];
+            snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+                     adapter->PhysicalAddress[0], adapter->PhysicalAddress[1],
+                     adapter->PhysicalAddress[2], adapter->PhysicalAddress[3],
+                     adapter->PhysicalAddress[4], adapter->PhysicalAddress[5]);
+            macList.push_back(string(mac));
+        }
+        adapter = adapter->Next;
+    }
+
+    return macList;
+}
+
+string bstrToUtf8(BSTR bstr) {
+    if (!bstr) return "";
+    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 1) return "";
+    string result(len - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    return result;
+}
+
+string getBiosInfo() {
+    HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres)) return "EMPTY";
+
+    hres = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
+        RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
+        nullptr, EOAC_NONE, nullptr);
+    if (FAILED(hres)) { CoUninitialize(); return "EMPTY"; }
+
+    IWbemLocator* pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+        IID_IWbemLocator, (LPVOID*)&pLoc);
+    if (FAILED(hres)) { CoUninitialize(); return "EMPTY"; }
+
+    IWbemServices* pSvc = nullptr;
+    // Передаём wide-строку как (BSTR)
+    hres = pLoc->ConnectServer(
+        (BSTR)L"ROOT\\CIMV2",
+        nullptr, nullptr, 0, 0, nullptr, nullptr, &pSvc);
+    if (FAILED(hres)) { pLoc->Release(); CoUninitialize(); return "EMPTY"; }
+
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+        RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+    if (FAILED(hres)) { pSvc->Release(); pLoc->Release(); CoUninitialize(); return "EMPTY"; }
+
+    IEnumWbemClassObject* pEnum = nullptr;
+    hres = pSvc->ExecQuery(
+        (BSTR)L"WQL",
+        (BSTR)L"SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS",
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+        nullptr, &pEnum);
+
+    string result = "EMPTY";
+    if (SUCCEEDED(hres) && pEnum) {
+        IWbemClassObject* pObj = nullptr;
+        ULONG uReturn = 0;
+        if (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn) {
+            VARIANT vMan, vVer;
+            VariantInit(&vMan); VariantInit(&vVer);
+            pObj->Get(L"Manufacturer", 0, &vMan, 0, 0);
+            pObj->Get(L"SMBIOSBIOSVersion", 0, &vVer, 0, 0);
+            if (vMan.vt == VT_BSTR && vVer.vt == VT_BSTR) {
+                string man = bstrToUtf8(vMan.bstrVal);
+                string ver = bstrToUtf8(vVer.bstrVal);
+                if (!man.empty() || !ver.empty()) {
+                    result = man + " - " + ver;
+                }
+            }
+            VariantClear(&vMan); VariantClear(&vVer);
+            pObj->Release();
+        }
+        pEnum->Release();
+    }
+
+    pSvc->Release(); pLoc->Release(); CoUninitialize();
+    return result;
+}
+
+string getCpuBrand() {
+    int cpuInfo[4] = {0};
+    char brand[49] = {0};  // 3 chunks по 16 байт = 48 + '\0'
+
+    // Проверяем, поддерживает ли CPUID функцию 0x80000004 (brand string)
+    __cpuid(cpuInfo, 0x80000000);
+    unsigned int maxExId = cpuInfo[0];
+
+    if (maxExId < 0x80000004) {
+        return "Unknown CPU";
+    }
+
+    // Собираем brand string из трёх вызовов
+    __cpuidex(reinterpret_cast<int*>(brand + 0), 0x80000002, 0);
+    __cpuidex(reinterpret_cast<int*>(brand + 16), 0x80000003, 0);
+    __cpuidex(reinterpret_cast<int*>(brand + 32), 0x80000004, 0);
+
+    return string(brand);
+}
+
+vector<string> getVideoAdapters() {
+    vector<string> adapters;
+    HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres)) return adapters;
+
+    hres = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
+        RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
+        nullptr, EOAC_NONE, nullptr);
+    if (FAILED(hres)) { CoUninitialize(); return adapters; }
+
+    IWbemLocator* pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+        IID_IWbemLocator, (LPVOID*)&pLoc);
+    if (FAILED(hres)) { CoUninitialize(); return adapters; }
+
+    IWbemServices* pSvc = nullptr;
+    hres = pLoc->ConnectServer(
+        (BSTR)L"ROOT\\CIMV2",
+        nullptr, nullptr, 0, 0, nullptr, nullptr, &pSvc);
+    if (FAILED(hres)) { pLoc->Release(); CoUninitialize(); return adapters; }
+
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+        RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+    if (FAILED(hres)) { pSvc->Release(); pLoc->Release(); CoUninitialize(); return adapters; }
+
+    IEnumWbemClassObject* pEnum = nullptr;
+    hres = pSvc->ExecQuery(
+        (BSTR)L"WQL",
+        (BSTR)L"SELECT Name FROM Win32_VideoController",
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+        nullptr, &pEnum);
+
+    if (SUCCEEDED(hres) && pEnum) {
+        IWbemClassObject* pObj = nullptr;
+        ULONG uReturn = 0;
+        while (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn) {
+            VARIANT vName;
+            VariantInit(&vName);
+            if (SUCCEEDED(pObj->Get(L"Name", 0, &vName, 0, 0)) && vName.vt == VT_BSTR) {
+                adapters.push_back(bstrToUtf8(vName.bstrVal));
+            }
+            VariantClear(&vName);
+            pObj->Release();
+        }
+        pEnum->Release();
+    }
+
+    pSvc->Release(); pLoc->Release(); CoUninitialize();
+    return adapters;
+}
+

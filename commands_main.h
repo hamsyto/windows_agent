@@ -1,4 +1,6 @@
 // commands.h
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
 
 #include <algorithm>
@@ -248,13 +250,13 @@ SOCKET InitConnectSocket() {
 }
 
 void ConnectServer(SOCKET connect_socket) {
-    Settings ser = {};
-    if (!load_env_settings(ser)) return;
+    Settings setting = {};
+    if (!load_env_settings(setting)) return;
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     // преобразует 16-битное число в сетевой порядок
-    addr.sin_port = htons(ser.port_server);
-    addr.sin_addr.s_addr = inet_addr(ser.ip_server.c_str());  //
+    addr.sin_port = htons(setting.port_server);
+    addr.sin_addr.s_addr = inet_addr(setting.ip_server.c_str());  //
 
     if (connect(connect_socket, reinterpret_cast<struct sockaddr*>(&addr),
                 sizeof(addr)) != 0) {

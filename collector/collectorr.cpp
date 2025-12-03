@@ -6,8 +6,8 @@
 // HDD+SSD (free + total)
 // Здесь по 1 функции на каждую модель данных, каждая собирает своё и возвращает
 // свой тип данных
+#define WIN32_LEAN_AND_MEAN
 #include "collectorr.h"
-#include "commands_coll.h"
 
 #include <VersionHelpers.h>
 #include <windows.h>
@@ -15,9 +15,12 @@
 
 #include <cstdint>
 #include <iostream>
+#include <cmath>
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#include "commands_coll.h"
 
 using namespace std;
 
@@ -46,13 +49,15 @@ RAM GetRam() {
 
     ULONGLONG mem_KB = 0;
     if (GetPhysicallyInstalledSystemMemory(&mem_KB)) {
-        mem_MB.total_mb = mem_KB / 1024;
+        mem_MB.total_mb = mem_KB / 1024.0;
+        mem_MB.total_mb = round(mem_MB.total_mb * 100.0) / 100.0;
     }
     MEMORYSTATUSEX mem_byte = {};
     // установка версии структуры для обратной совместимости
     mem_byte.dwLength = sizeof(mem_byte);
     if (GlobalMemoryStatusEx(&mem_byte)) {
-        mem_MB.free_mb = mem_byte.ullAvailPhys / (1024 * 1024);
+        mem_MB.free_mb = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
+        mem_MB.free_mb = round(mem_MB.free_mb * 100.0) / 100.0;
     }
 
     return mem_MB;
@@ -71,6 +76,7 @@ CPU GetCpu() {
     // Ждём немного (например, 1000 мс - 1 сек), чтобы получить точную загрузку
     Sleep(1000);
     cpu.usage = GetCPUUsage();
+    cpu.usage = round(cpu.usage * 100.0) / 100.0;
     return cpu;
 }
 
@@ -116,4 +122,15 @@ OS GetOs() {
     osys.timestamp = static_cast<int>(unixTime);
 
     return osys;
+}
+
+Hardware GetHardware() {
+    Hardware hardware = {};
+
+    hardware.bios = getBiosInfo();
+    hardware.cpu = getCpuBrand();
+    hardware.mac = getMacAddresses();
+    hardware.video = getVideoAdapters();
+
+    return hardware;
 }

@@ -1,10 +1,12 @@
 #ifndef WINDOWS_SIMPLE_MESSAGE_H
 #define WINDOWS_SIMPLE_MESSAGE_H
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
-using namespace std;
 
 struct Disk {
     double free_mb;   // Megabytes
@@ -24,12 +26,24 @@ struct CPU {
 };
 
 struct OS {
-    string hostname;
-    string domain;  // WORKGROUP
-    string version;
+    std::string hostname;
+    std::string domain;  // WORKGROUP
+    std::string version;
     int timestamp;  // время в формате timestamp
 };
 
+struct Hardware {
+    std::string bios;
+    std::string cpu;
+    std::vector<std::string> mac;
+    std::vector<std::string> video;  // видеоадаптер
+};
+/*
+}': {'bios': 'EMPTY',
+                          'cpu': 'EMPTY',
+                          'mac': ['mac_0', 'mac_1', 'mac_2'],
+                          'video': ['video_0', 'video_1', 'video_2']},
+*/
 enum class MessageType {
     SIMPLE_MESSAGE,
 };
@@ -41,10 +55,11 @@ struct Message {
     };
 
     struct SimplePCReport {
-        vector<Disk> disks;
+        std::vector<Disk> disks;
         RAM ram;
         CPU cpu;
         OS system;
+        Hardware hardware;
     };
 
     Header header;
@@ -52,12 +67,12 @@ struct Message {
     // auto* message; // сам должен определить тип данных
 
     // Метод сериализации
-    string toJson() const;
+    std::string toJson() const;
 };
 
 struct Settings {
-    int idle_time;  // как часто отправлять данные
-    string ip_server;  // ip или dns адрес сервера куда отправлять
+    int idle_time;          // как часто отправлять данные
+    std::string ip_server;  // ip или dns адрес сервера куда отправлять
     int port_server;
 };
 
