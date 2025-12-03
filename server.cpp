@@ -93,7 +93,7 @@ void HandleClient(SOCKET clientSocket) {
         }
 
         // 4. Сохраняем в файл
-        SaveJsonToFile(jsonStr);
+        (SaveJsonToFile(jsonStr));
     }
     closesocket(clientSocket);
 }
@@ -147,8 +147,8 @@ int main() {
         }
 
         std::cout << "Client connected." << std::endl;
-        auto buffer = int32_to_network_bytes(10);
-        send(clientSocket, buffer.data(), buffer.size(), 0);
+        //auto buffer = int32_to_network_bytes(10);
+        //send(clientSocket, buffer.data(), buffer.size(), 0);
         // Обработка клиента в отдельном потоке (упрощённо — без управления
         // потоками)
         thread(HandleClient, clientSocket).detach();

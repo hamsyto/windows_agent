@@ -1,7 +1,6 @@
 #ifndef WINDOWS_SIMPLE_MESSAGE_H
 #define WINDOWS_SIMPLE_MESSAGE_H
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include <cstdint>
@@ -38,20 +37,18 @@ struct Hardware {
     std::vector<std::string> mac;
     std::vector<std::string> video;  // видеоадаптер
 };
-/*
-}': {'bios': 'EMPTY',
-                          'cpu': 'EMPTY',
-                          'mac': ['mac_0', 'mac_1', 'mac_2'],
-                          'video': ['video_0', 'video_1', 'video_2']},
-*/
+struct Ping {
+    DWORD ping_millisec; 
+};
+
 enum class MessageType {
     SIMPLE_MESSAGE,
 };
 
 struct Message {
     struct Header {
-        int agent_id;   // пока рандом или 1-3
-        char type[64];  // тип сообщения, == SimplePCReport
+        unsigned long agent_id;   // пока рандом или 1-3
+        char type[64];  // SimplePCReport, whoami, IAmNotOK
     };
 
     struct SimplePCReport {
@@ -60,6 +57,7 @@ struct Message {
         CPU cpu;
         OS system;
         Hardware hardware;
+        Ping ping_m;
     };
 
     Header header;

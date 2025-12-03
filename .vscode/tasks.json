@@ -30,9 +30,15 @@
             "type": "shell",
             "command": "g++",
             "args": [
+                "-static-libgcc", 
+                "-static-libstdc++",
+                "-DWIN32_LEAN_AND_MEAN", 
+                "-D_WIN32_WINNT=0x0A00",
+                "-DWINVER=0x0A00",
                 "-fdiagnostics-color=always",
                 "-g",
                 "main.cpp",
+                "commands_main.cpp",
                 "collector\\collectorr.cpp",
                 "collector\\commands_coll.cpp",
                 "-o",
@@ -42,7 +48,7 @@
                 "-lole32",
                 "-loleaut32",
                 "-lwbemuuid",
-                "-liphlpapi"
+                "-liphlpapi",
             ],
             "group": {
                 "kind": "build",

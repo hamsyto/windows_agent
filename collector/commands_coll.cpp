@@ -1,47 +1,112 @@
 // commands_coll.cpp
 
-// === КРИТИЧЕСКИ ВАЖНО: именно такой порядок ===
-#define _WIN32_WINNT 0x0601
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#define NET_API_STATUS DWORD
 
-// === Обход для NET_API_STATUS в MinGW UCRT64 ===
-// NET_API_STATUS == DWORD, так что можно определить вручную
-#ifndef NET_API_STATUS
-typedef DWORD NET_API_STATUS;
-#endif
+//== 1 == Важен порядок
+#include <windows.h>
+//== 2 ==
+#include <winsock2.h>
+//== 3 ==
+#include <ws2tcpip.h>
 
 // === Заголовки NetAPI ===
 #include <lmapibuf.h>  // объявляет NetApiBufferFree
 #include <lmerr.h>     // определяет NERR_Success (как DWORD)
 #include <lmjoin.h>    // объявляет NetGetJoinInformation
 
+//== 1 == Важен порядок
+#include <ipexport.h>
+//== 2 ==
+#include <iphlpapi.h>
+//== 3 ==
+#include <icmpapi.h>
+
 // === Другие заголовки ===
 #include <VersionHelpers.h>
 #include <Wbemidl.h>
-#include <intrin.h>    // для __cpuid
-#include <iphlpapi.h>  // для GetAdaptersAddresses
+#include <intrin.h>
 #include <winioctl.h>
 
-#include <atomic>
-#include <cstdint>
-#include <cstdio>
 #include <cmath>
-#include <cstdlib>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
- /*
-#pragma comment(lib, "wbemuuid.lib")
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "oleaut32.lib")
-*/
+
+#include "../const.h"
 #include "commands_coll.h"
 
 using namespace std;
+
+unordered_map<string, string> ClearEnvFile() {
+    ifstream file(kEnvFile);  // ищет .env файл
+    if (!file.is_open()) {
+        cout << "Ошибка: не удалось открыть .env\n";
+        // return false;
+    }
+    unordered_map<string, string> env_map;
+    string line;
+    while (getline(file, line)) {
+        // Удаляем комментарии
+        size_t comment_pos = line.find('#');
+        if (comment_pos != string::npos) {
+            line = line.substr(0, comment_pos);
+        }
+
+        line = Trim(line);
+        if (line.empty()) continue;
+
+        size_t eq_pos = line.find('=');
+        if (eq_pos == string::npos) continue;
+
+        string key = Trim(line.substr(0, eq_pos));
+        string value = Trim(line.substr(eq_pos + 1));
+
+        // Убираем кавычки, если есть (поддержка "value" и 'value')
+        if ((value.size() >= 2) &&
+            ((value.front() == '"' && value.back() == '"') ||
+             (value.front() == '\'' && value.back() == '\''))) {
+            value = value.substr(1, value.size() - 2);
+        }
+
+        env_map[key] = value;
+    }
+    file.close();
+    return env_map;
+}
+
+bool LoadEnvSettings(Settings& out) {
+    unordered_map<string, string> env_map = ClearEnvFile();
+
+    // Проверяем наличие всех нужных переменных
+    if (env_map.find("IDLE_TIME") == env_map.end() ||
+        env_map.find("IP_SERVER") == env_map.end() ||
+        env_map.find("PORT_SERVER") == env_map.end()) {
+        cout << "Ошибка: в .env отсутствуют обязательные переменные\n";
+        return false;
+    }
+
+    try {
+        out.idle_time = stoi(env_map["IDLE_TIME"]);
+        out.ip_server = env_map["IP_SERVER"];
+        out.port_server = stoi(env_map["PORT_SERVER"]);
+    } catch (const exception& e) {
+        cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
+        return false;
+    }
+
+    return true;
+}
+
+string Trim(const string& str) {
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == string::npos) return "";
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
 
 Disk FillDiskInfo(int diskIndex) {
     Disk disk = {};
@@ -377,10 +442,12 @@ vector<string> getMacAddresses() {
 
 string bstrToUtf8(BSTR bstr) {
     if (!bstr) return "";
-    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    int len =
+        WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
     if (len <= 1) return "";
     string result(len - 1, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr,
+                        nullptr);
     return result;
 }
 
@@ -388,33 +455,47 @@ string getBiosInfo() {
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if (FAILED(hres)) return "EMPTY";
 
-    hres = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
-        RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
-        nullptr, EOAC_NONE, nullptr);
-    if (FAILED(hres)) { CoUninitialize(); return "EMPTY"; }
+    hres = CoInitializeSecurity(
+        nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return "EMPTY";
+    }
 
     IWbemLocator* pLoc = nullptr;
     hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
-        IID_IWbemLocator, (LPVOID*)&pLoc);
-    if (FAILED(hres)) { CoUninitialize(); return "EMPTY"; }
+                            IID_IWbemLocator, (LPVOID*)&pLoc);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return "EMPTY";
+    }
 
     IWbemServices* pSvc = nullptr;
     // Передаём wide-строку как (BSTR)
-    hres = pLoc->ConnectServer(
-        (BSTR)L"ROOT\\CIMV2",
-        nullptr, nullptr, 0, 0, nullptr, nullptr, &pSvc);
-    if (FAILED(hres)) { pLoc->Release(); CoUninitialize(); return "EMPTY"; }
+    hres = pLoc->ConnectServer((BSTR)L"ROOT\\CIMV2", nullptr, nullptr, 0, 0,
+                               nullptr, nullptr, &pSvc);
+    if (FAILED(hres)) {
+        pLoc->Release();
+        CoUninitialize();
+        return "EMPTY";
+    }
 
     hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
-        RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
-    if (FAILED(hres)) { pSvc->Release(); pLoc->Release(); CoUninitialize(); return "EMPTY"; }
+                             RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+    if (FAILED(hres)) {
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return "EMPTY";
+    }
 
     IEnumWbemClassObject* pEnum = nullptr;
     hres = pSvc->ExecQuery(
         (BSTR)L"WQL",
         (BSTR)L"SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS",
-        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-        nullptr, &pEnum);
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &pEnum);
 
     string result = "EMPTY";
     if (SUCCEEDED(hres) && pEnum) {
@@ -422,7 +503,8 @@ string getBiosInfo() {
         ULONG uReturn = 0;
         if (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn) {
             VARIANT vMan, vVer;
-            VariantInit(&vMan); VariantInit(&vVer);
+            VariantInit(&vMan);
+            VariantInit(&vVer);
             pObj->Get(L"Manufacturer", 0, &vMan, 0, 0);
             pObj->Get(L"SMBIOSBIOSVersion", 0, &vVer, 0, 0);
             if (vMan.vt == VT_BSTR && vVer.vt == VT_BSTR) {
@@ -432,13 +514,16 @@ string getBiosInfo() {
                     result = man + " - " + ver;
                 }
             }
-            VariantClear(&vMan); VariantClear(&vVer);
+            VariantClear(&vMan);
+            VariantClear(&vVer);
             pObj->Release();
         }
         pEnum->Release();
     }
 
-    pSvc->Release(); pLoc->Release(); CoUninitialize();
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
     return result;
 }
 
@@ -467,40 +552,55 @@ vector<string> getVideoAdapters() {
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if (FAILED(hres)) return adapters;
 
-    hres = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
-        RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE,
-        nullptr, EOAC_NONE, nullptr);
-    if (FAILED(hres)) { CoUninitialize(); return adapters; }
+    hres = CoInitializeSecurity(
+        nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return adapters;
+    }
 
     IWbemLocator* pLoc = nullptr;
     hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
-        IID_IWbemLocator, (LPVOID*)&pLoc);
-    if (FAILED(hres)) { CoUninitialize(); return adapters; }
+                            IID_IWbemLocator, (LPVOID*)&pLoc);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return adapters;
+    }
 
     IWbemServices* pSvc = nullptr;
-    hres = pLoc->ConnectServer(
-        (BSTR)L"ROOT\\CIMV2",
-        nullptr, nullptr, 0, 0, nullptr, nullptr, &pSvc);
-    if (FAILED(hres)) { pLoc->Release(); CoUninitialize(); return adapters; }
+    hres = pLoc->ConnectServer((BSTR)L"ROOT\\CIMV2", nullptr, nullptr, 0, 0,
+                               nullptr, nullptr, &pSvc);
+    if (FAILED(hres)) {
+        pLoc->Release();
+        CoUninitialize();
+        return adapters;
+    }
 
     hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
-        RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
-    if (FAILED(hres)) { pSvc->Release(); pLoc->Release(); CoUninitialize(); return adapters; }
+                             RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+    if (FAILED(hres)) {
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return adapters;
+    }
 
     IEnumWbemClassObject* pEnum = nullptr;
     hres = pSvc->ExecQuery(
-        (BSTR)L"WQL",
-        (BSTR)L"SELECT Name FROM Win32_VideoController",
-        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-        nullptr, &pEnum);
+        (BSTR)L"WQL", (BSTR)L"SELECT Name FROM Win32_VideoController",
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &pEnum);
 
     if (SUCCEEDED(hres) && pEnum) {
         IWbemClassObject* pObj = nullptr;
         ULONG uReturn = 0;
-        while (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn) {
+        while (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK &&
+               uReturn) {
             VARIANT vName;
             VariantInit(&vName);
-            if (SUCCEEDED(pObj->Get(L"Name", 0, &vName, 0, 0)) && vName.vt == VT_BSTR) {
+            if (SUCCEEDED(pObj->Get(L"Name", 0, &vName, 0, 0)) &&
+                vName.vt == VT_BSTR) {
                 adapters.push_back(bstrToUtf8(vName.bstrVal));
             }
             VariantClear(&vName);
@@ -509,7 +609,84 @@ vector<string> getVideoAdapters() {
         pEnum->Release();
     }
 
-    pSvc->Release(); pLoc->Release(); CoUninitialize();
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
     return adapters;
 }
 
+// Возвращает средний пинг в миллисекундах (0 при ошибке)
+DWORD getAveragePing(const char* host, int attempts) {
+    if (!host || attempts <= 0) return 0;
+
+    // Инициализация Winsock (требуется для inet_addr / getaddrinfo)
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        return 0;
+    }
+
+    // Преобразуем имя хоста в IP-адрес
+    ADDRINFOA hints = {};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    ADDRINFOA* result = nullptr;
+    if (getaddrinfo(host, nullptr, &hints, &result) != 0) {
+        WSACleanup();
+        return 0;
+    }
+
+    sockaddr_in* sa = reinterpret_cast<sockaddr_in*>(result->ai_addr);
+    IPAddr destIp = sa->sin_addr.S_un.S_addr;
+    freeaddrinfo(result);
+
+    // Открываем ICMP-файл
+    HANDLE hIcmp = IcmpCreateFile();
+    if (hIcmp == INVALID_HANDLE_VALUE) {
+        WSACleanup();
+        return 0;
+    }
+
+    // Буфер для ответа (достаточно для одного эха + данные)
+    constexpr size_t replySize = sizeof(ICMP_ECHO_REPLY) + 8;
+    vector<BYTE> replyBuf(replySize);
+
+    vector<DWORD> rtts;
+    rtts.reserve(attempts);
+
+    for (int i = 0; i < attempts; ++i) {
+        DWORD replyCount =
+            IcmpSendEcho(hIcmp, destIp,
+                         nullptr,  // данные (можно nullptr)
+                         0,        // размер данных
+                         nullptr,  // опции (обычно nullptr)
+                         replyBuf.data(), static_cast<DWORD>(replyBuf.size()),
+                         2000  // таймаут в миллисекундах
+            );
+
+        if (replyCount > 0) {
+            PICMP_ECHO_REPLY reply =
+                reinterpret_cast<PICMP_ECHO_REPLY>(replyBuf.data());
+            if (reply->Status == IP_SUCCESS) {
+                rtts.push_back(reply->RoundTripTime);
+            }
+        }
+
+        Sleep(100);  // небольшая пауза между попытками
+    }
+
+    IcmpCloseHandle(hIcmp);
+    WSACleanup();
+
+    if (rtts.empty()) {
+        return 0;  // ни один пинг не удался
+    }
+
+    // Среднее арифметическое
+    unsigned long long sum = 0;
+    for (DWORD rtt : rtts) {
+        sum += rtt;
+    }
+    return static_cast<DWORD>(sum / rtts.size());
+}

@@ -7,7 +7,6 @@
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
-#define WIN32_LEAN_AND_MEAN
 #include <VersionHelpers.h>
 #include <winbase.h>
 #include <windows.h>
@@ -20,16 +19,25 @@
 #include <vector>
 
 #include "../collector/collectorr.h"
+#include "../collector/commands_coll.h"
 #include "nlohmann/json.hpp"
-#include "transport.h"
 
 using json = nlohmann::json;
 using namespace std;
 
-Message GetMess(Message& mess) {
-    mess = {};
+// сборка всех даыннх в одно сообщение
+Message GetMess(Message& mess);
+// отправляет сначала длину потом само сообщение
+void SendMessageAndMessageSize(SOCKET& client_socket, const std::string& jsonStr);
 
-    if (mess.header.agent_id == 0) {
+
+Message GetMess(Message& mess) {
+    bool IAmNotOK = false;
+    if (IAmNotOK) {
+        strcpy_s(mess.header.type, "IAmNotOK");
+    } else
+
+        if (mess.header.agent_id == 0) {
         strcpy_s(mess.header.type, "whoami");
     } else {
         strcpy_s(mess.header.type, "SimplePCReport");
@@ -40,6 +48,7 @@ Message GetMess(Message& mess) {
     mess.payload.cpu = GetCpu();
     mess.payload.system = GetOs();
     mess.payload.hardware = GetHardware();
+    mess.payload.ping_m = GetPing();
 
     return mess;
 }
@@ -68,7 +77,8 @@ string Message::toJson() const {
          {{"bios", payload.hardware.bios},
           {"cpu", payload.hardware.cpu},
           {"mac", json::array()},
-          {"video", json::array()}}}};
+          {"video", json::array()}}},
+        {"ping", payload.ping_m.ping_millisec}};
 
     // Диски
     for (const auto& disk : payload.disks) {
@@ -85,6 +95,35 @@ string Message::toJson() const {
         j["payload"]["hardware"]["video"].push_back(video);
     }
 
-    return j.dump();
+    return j.dump(2);
 }
+
+void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
+    if ((jsonStr.size()) > kMaxBuf) {
+        cout << "Message length exceeds the allowed sending length. Message "
+                "cannot be sent."
+             << endl;
+        return;
+    }
+
+    // 1. Подготовка длины (в network byte order)
+    uint32_t len = static_cast<uint32_t>(jsonStr.size());
+    uint32_t lenNetwork = htonl(len);  // host → network (big-endian)
+
+    // 2. Отправка длины
+    if (send(client_socket, reinterpret_cast<const char*>(&lenNetwork),
+             sizeof(lenNetwork), 0) == SOCKET_ERROR) {
+        cout << "send(char_size_message) failed with error: "
+             << WSAGetLastError() << endl;
+        return;
+    }
+
+    if (send(client_socket, jsonStr.c_str(), (int)jsonStr.size(), 0) ==
+        SOCKET_ERROR) {
+        cout << "send() failed with error: " << WSAGetLastError() << endl;
+        return;
+    }
+}
+
+
 #endif

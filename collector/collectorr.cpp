@@ -6,16 +6,14 @@
 // HDD+SSD (free + total)
 // Здесь по 1 функции на каждую модель данных, каждая собирает своё и возвращает
 // свой тип данных
-#define WIN32_LEAN_AND_MEAN
 #include "collectorr.h"
 
 #include <VersionHelpers.h>
 #include <windows.h>
 #include <winioctl.h>
 
-#include <cstdint>
-#include <iostream>
 #include <cmath>
+#include <iostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -133,4 +131,22 @@ Hardware GetHardware() {
     hardware.video = getVideoAdapters();
 
     return hardware;
+}
+
+Ping GetPing() {
+    Settings setting = {};
+    Ping ping_m = {};
+    if (!LoadEnvSettings(setting)) {
+        ping_m.ping_millisec = 0;
+        return ping_m;
+    }
+
+    DWORD avg = getAveragePing(setting.ip_server.c_str(), 3);
+
+    if (avg > 0) {
+        ping_m.ping_millisec = avg;
+        return ping_m;
+    }
+    ping_m.ping_millisec = 0;
+    return ping_m;
 }
