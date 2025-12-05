@@ -1,33 +1,53 @@
 // commands_main.cpp
-#include "commands_main.h"
 
 #include <windows.h>
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
 
 // == ==
 
-
-
 #include <string>
+
 #include "transport/transport.h"
 // == ==
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <atomic>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
+#include "commands_main.h"
 #include "const.h"
-
 
 using namespace std;
 
 atomic<bool> disconnected{true};
+
+void Registration() {
+    string error = "";
+    Hardware hardware = GetHardware();
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
 
 int SendMessages() {
     if (WinsockInit() != 0) return 1;
@@ -45,13 +65,11 @@ int SendMessages() {
             if (connect_socket != INVALID_SOCKET) {
                 CloseSocketCheck(connect_socket);
             }
-
             connect_socket = InitConnectSocket();
             if (connect_socket == INVALID_SOCKET) {
                 cout << "connect_socket don't init" << endl;
                 continue;
             }
-
             ConnectServer(connect_socket);
             if (disconnected) {
                 CloseSocketCheck(connect_socket);
@@ -60,19 +78,20 @@ int SendMessages() {
         }
 
         msg = GetMess(msg);
-        string jsonStr = msg.toJson();  // без отступов: j.dump()
+        string jsonStr = msg.toJson();
 
         if (disconnected) continue;  // проверка на отключение перед отправкой
 
         SendMessageAndMessageSize(connect_socket, jsonStr);
-        unsigned long id = 0;
+        int id = 0;
         if (msg.header.agent_id == 0) {
             RecvMessage(connect_socket, id, disconnected);
             if (id < 1) continue;
             msg.header.agent_id = id;
             cout << id;  // полученно от сервера
         }
-        Sleep(setting.idle_time * 1000);
+        Sleep(setting.idle_time * 10000);
+        disconnected = true;
     }
 }
 
@@ -120,6 +139,13 @@ void ConnectServer(SOCKET connect_socket) {
     disconnected = false;
 }
 
+void CloseSocketCheck(SOCKET& sck) {
+    if ((closesocket(sck)) == SOCKET_ERROR) {
+        cout << "closesocket failed with error: " << WSAGetLastError() << endl;
+    }
+    sck = INVALID_SOCKET;
+}
+
 void RecvMessage(SOCKET connect_socket, int32_t& id,
                  atomic<bool>& disconnected) {
     while (!disconnected) {
@@ -145,11 +171,11 @@ unsigned long ReadOrCreateCounterFile(const string& file_name) {
     // Попытка прочитать файл
     ifstream in_file(file_name);
     string content;
+    unsigned long long value = 0;
 
     if (in_file.is_open()) {
         getline(in_file, content);  // читаем до первого \n (или весь файл)
         in_file.close();
-
         // Удаляем начальные и конечные пробельные символы
         size_t start = content.find_first_not_of(" \t\r\n");
         // файл не пустой или не только пробелы
@@ -166,7 +192,6 @@ unsigned long ReadOrCreateCounterFile(const string& file_name) {
                 if (trimmed != "0" && trimmed[0] != '0') {
                     // Преобразуем
                     istringstream iss(trimmed);
-                    unsigned long long value = 0;
                     if (iss >> value && value > 0) {
                         // Успешно: корректное положительное число
                         return value;
@@ -181,12 +206,9 @@ unsigned long ReadOrCreateCounterFile(const string& file_name) {
             outfile << "0";
             outfile.close();
         }
-        return 0;
     }
+    return value;
 }
-
-
-
 
 bool ensure_file_has_int(const char* filename, int32_t expected_value) {
     ifstream file(filename);
@@ -237,40 +259,6 @@ bool ensure_file_has_int(const char* filename, int32_t expected_value) {
 
     // Значения не совпадают — перезаписываем
     return write_int_to_file(filename, expected_value);
-}
-
-void CloseSocketCheck(SOCKET& sck) {
-    if ((closesocket(sck)) == SOCKET_ERROR) {
-        cout << "closesocket failed with error: " << WSAGetLastError() << endl;
-    }
-    sck = INVALID_SOCKET;
-}
-
-void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
-    if ((jsonStr.size()) > kMaxBuf) {
-        cout << "Message length exceeds the allowed sending length. Message "
-                "cannot be sent."
-             << endl;
-        return;
-    }
-
-    // 1. Подготовка длины (в network byte order)
-    uint32_t len = static_cast<uint32_t>(jsonStr.size());
-    uint32_t lenNetwork = htonl(len);  // host → network (big-endian)
-
-    // 2. Отправка длины
-    if (send(client_socket, reinterpret_cast<const char*>(&lenNetwork),
-             sizeof(lenNetwork), 0) == SOCKET_ERROR) {
-        cout << "send(char_size_message) failed with error: "
-             << WSAGetLastError() << endl;
-        return;
-    }
-
-    if (send(client_socket, jsonStr.c_str(), (int)jsonStr.size(), 0) ==
-        SOCKET_ERROR) {
-        cout << "send() failed with error: " << WSAGetLastError() << endl;
-        return;
-    }
 }
 
 int64_t network_buffer_to_int32(char* buffer) {

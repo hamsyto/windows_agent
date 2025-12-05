@@ -41,6 +41,11 @@
 
 using namespace std;
 
+
+
+
+
+
 unordered_map<string, string> ClearEnvFile() {
     ifstream file(kEnvFile);  // ищет .env файл
     if (!file.is_open()) {
@@ -621,15 +626,14 @@ DWORD getAveragePing(const char* host, int attempts) {
 
     // Инициализация Winsock (требуется для inet_addr / getaddrinfo)
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        return 0;
-    }
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return 0;
+    
 
     // Преобразуем имя хоста в IP-адрес
     ADDRINFOA hints = {};
     hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_socktype = 0;
+    hints.ai_protocol = 0;
 
     ADDRINFOA* result = nullptr;
     if (getaddrinfo(host, nullptr, &hints, &result) != 0) {
@@ -662,7 +666,7 @@ DWORD getAveragePing(const char* host, int attempts) {
                          0,        // размер данных
                          nullptr,  // опции (обычно nullptr)
                          replyBuf.data(), static_cast<DWORD>(replyBuf.size()),
-                         2000  // таймаут в миллисекундах
+                         10000  // таймаут в миллисекундах
             );
 
         if (replyCount > 0) {
@@ -677,7 +681,6 @@ DWORD getAveragePing(const char* host, int attempts) {
     }
 
     IcmpCloseHandle(hIcmp);
-    WSACleanup();
 
     if (rtts.empty()) {
         return 0;  // ни один пинг не удался

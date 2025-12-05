@@ -11,11 +11,17 @@
 using namespace std;
 
 int SendMessages();
+void Registration();
 
 
 
 int main() {
-    if (SendMessages() == 1) return 1;
+    Registration();
+
+    if (SendMessages() == 1) {
+        WSACleanup();
+        return 1;
+    }
 
     // освобождение ресурсов Winsock
     WSACleanup();

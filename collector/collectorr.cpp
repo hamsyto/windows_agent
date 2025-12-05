@@ -141,7 +141,8 @@ Ping GetPing() {
         return ping_m;
     }
 
-    DWORD avg = getAveragePing(setting.ip_server.c_str(), 3);
+    DWORD avg = getAveragePing(setting.ip_server.c_str(), 4);
+    // DWORD avg = getAveragePing("google.com", 3); // чист для проверки
 
     if (avg > 0) {
         ping_m.ping_millisec = avg;

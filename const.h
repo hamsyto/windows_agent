@@ -1,9 +1,16 @@
 // const.h
 
+#ifndef CONST_H
+#define CONST_H
+
 #pragma once
 
-const char* kFileName = "id_file";
-const char* kEnvFile = ".env";
+#include <cstdint> // для uint32_t
+
+inline constexpr const char* kFileName = "id_file";
+inline constexpr const char* kEnvFile = ".env";
 
 const uint32_t kMaxBuf = 1024;
 const uint32_t kNumChar = 5; // количество разрядов kMaxBuf + 1 (на \0)
+
+#endif

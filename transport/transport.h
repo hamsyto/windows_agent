@@ -20,6 +20,7 @@
 
 #include "../collector/collectorr.h"
 #include "../collector/commands_coll.h"
+#include "../const.h"
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
@@ -28,16 +29,14 @@ using namespace std;
 // сборка всех даыннх в одно сообщение
 Message GetMess(Message& mess);
 // отправляет сначала длину потом само сообщение
-void SendMessageAndMessageSize(SOCKET& client_socket, const std::string& jsonStr);
-
+void SendMessageAndMessageSize(SOCKET& client_socket,
+                               const std::string& jsonStr);
 
 Message GetMess(Message& mess) {
     bool IAmNotOK = false;
     if (IAmNotOK) {
         strcpy_s(mess.header.type, "IAmNotOK");
-    } else
-
-        if (mess.header.agent_id == 0) {
+    } else if (mess.header.agent_id == 0) {
         strcpy_s(mess.header.type, "whoami");
     } else {
         strcpy_s(mess.header.type, "SimplePCReport");
@@ -95,7 +94,7 @@ string Message::toJson() const {
         j["payload"]["hardware"]["video"].push_back(video);
     }
 
-    return j.dump(2);
+    return j.dump();
 }
 
 void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
@@ -124,6 +123,5 @@ void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
         return;
     }
 }
-
 
 #endif

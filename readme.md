@@ -5,9 +5,78 @@ g++ -fdiagnostics-color=always -g
     collector\commands_coll.cpp  
 -o compiled\main.exe -lws2_32 -lnetapi32
 
+
+
+
+сценарий 
+2 метода (сценарий кто я и отправка данных)
+1. регистрация
+2. послать данные
+
+string errorToString(Error e) {
+    превратить ошибку в строку;
+    return (string)error;
+}
+
+void registragte{
+    string error = "";
+    try{
+        Hardware hardware = collect();
+    } catch e {
+        error = errorToString(e);
+    }
+    
+    Начать соединение;
+    if (error != "") {
+        послать данные;
+    } else {
+        послать ошибку;
+    }
+    получить ID;
+    try {
+        сохраниить id в файл;
+    } catch e {
+        error = errorToString(e);
+        отправить ошибку;
+    }
+    закрыть соединение;
+}
+
+
+void sendData(int id) {
+    string error = "";
+    try{
+        Hardware hardware = collect();
+    } catch e {
+        error = errorToString(e);
+    }
+    
+    Начать соединение;
+    if (error != "") {
+        послать данные;
+    } else {
+        послать ошибку;
+    }
+    закрыть соединение;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
 
-
+ошибка отправки
 
 +? пинг; (если ошибка, то в getAveragePing)
 ++ обрезать float;

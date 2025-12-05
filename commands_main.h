@@ -3,6 +3,9 @@
 #ifndef COMMANDS_MAIN_H
 #define COMMANDS_MAIN_H
 
+#include <atomic>
+#include <string>
+
 int SendMessages();
 
 // инициализирует winsock
@@ -11,11 +14,10 @@ SOCKET InitConnectSocket();
 void ConnectServer(SOCKET connect_socket);
 
 void RecvMessage(SOCKET connect_socket, int32_t& id,
-                 atomic<bool>& disconnected);
+                std::atomic<bool>& disconnected);
 
 // закрывает сокет с проверкой на закрытие
 void CloseSocketCheck(SOCKET& sck);
-
 
 int64_t network_buffer_to_int32(char* buffer);
 

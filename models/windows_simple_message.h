@@ -48,7 +48,7 @@ enum class MessageType {
 struct Message {
     struct Header {
         unsigned long agent_id;   // пока рандом или 1-3
-        char type[64];  // SimplePCReport, whoami, IAmNotOK
+        char type[64];  // SimplePCReport, whoami, error, IAmNotOK,
     };
 
     struct SimplePCReport {
