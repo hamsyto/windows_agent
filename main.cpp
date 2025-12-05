@@ -16,7 +16,6 @@ void Registration();
 
 
 int main() {
-    Registration();
 
     if (SendMessages() == 1) {
         WSACleanup();

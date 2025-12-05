@@ -5,8 +5,9 @@ g++ -fdiagnostics-color=always -g
     collector\commands_coll.cpp  
 -o compiled\main.exe -lws2_32 -lnetapi32
 
-
-
+== щас делаю ==
+SendData (commands_main.cpp)
+===============
 
 сценарий 
 2 метода (сценарий кто я и отправка данных)

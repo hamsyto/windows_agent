@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "transport/transport.h"
+
 // == ==
 
 #include <algorithm>
@@ -22,77 +22,122 @@
 
 #include "commands_main.h"
 #include "const.h"
+#include "transport/transport.h"
 
 using namespace std;
 
 atomic<bool> disconnected{true};
 
-void Registration() {
-    string error = "";
-    Hardware hardware = GetHardware();
-
-
-
-
-
-
-
-
-
-
-}
-
-
-
-
-
-
-
-
+//  ConnectServer
 int SendMessages() {
     if (WinsockInit() != 0) return 1;
 
     Message msg = {};
-    msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
+    // чтение или создание файла с id
+    // msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
 
     Settings setting = {};
     if (!LoadEnvSettings(setting)) return 1;
     cout << setting.ip_server << ":" << setting.port_server << endl;
 
     SOCKET connect_socket = INVALID_SOCKET;
+
     while (true) {
-        if (disconnected) {
-            if (connect_socket != INVALID_SOCKET) {
-                CloseSocketCheck(connect_socket);
-            }
-            connect_socket = InitConnectSocket();
-            if (connect_socket == INVALID_SOCKET) {
-                cout << "connect_socket don't init" << endl;
-                continue;
-            }
-            ConnectServer(connect_socket);
-            if (disconnected) {
-                CloseSocketCheck(connect_socket);
-                continue;
-            }
-        }
-
-        msg = GetMess(msg);
-        string jsonStr = msg.toJson();
-
-        if (disconnected) continue;  // проверка на отключение перед отправкой
-
-        SendMessageAndMessageSize(connect_socket, jsonStr);
-        int id = 0;
-        if (msg.header.agent_id == 0) {
-            RecvMessage(connect_socket, id, disconnected);
-            if (id < 1) continue;
-            msg.header.agent_id = id;
-            cout << id;  // полученно от сервера
-        }
-        Sleep(setting.idle_time * 10000);
-        disconnected = true;
+        Registration(connect_socket, msg, setting);
+        SendData(connect_socket, msg, setting);
     }
+}
+
+void Registration(SOCKET& connect_socket, Message& msg,
+                  const Settings& setting) {
+    string error = "";
+
+    try {
+        msg = GetMess(msg);
+    } catch (const exception& e) {
+        error = e.what();
+    }
+
+    if (StartConnection(connect_socket, setting) == 1) return;
+    string jsonStr = msg.toJson();
+
+    if (disconnected) return;  // проверка на отключение перед отправкой
+
+    if (error == "") {
+        SendMessageAndMessageSize(connect_socket, jsonStr);
+    } else {
+        SendMessageAndMessageSize(connect_socket, error);
+    }
+
+    int id = 0;
+    if (msg.header.agent_id == 0) {
+        RecvMessage(connect_socket, id);
+        if (id < 1) return;  // id знач не правильное
+        msg.header.agent_id = id;
+    }
+
+    if (disconnected) return;  // проверка на отключение перед отправкой
+
+    try {
+        if (ensure_file_has_int(kFileName, id)) cout << "id save." << endl;
+    } catch (const exception& e) {
+        error = e.what();
+        SendMessageAndMessageSize(connect_socket, error);
+    }
+    disconnected = true;
+}
+
+int StartConnection(SOCKET& connect_socket, const Settings& setting) {
+    if (disconnected) {
+        if (connect_socket != INVALID_SOCKET) {
+            CloseSocketCheck(connect_socket);
+            // паузы между подключениями
+            Sleep(setting.idle_time * 10000);
+        }
+        connect_socket = InitConnectSocket();
+        if (connect_socket == INVALID_SOCKET) {
+            cout << "connect_socket don't init" << endl;
+            return 1;
+        }
+        ConnectServer(connect_socket);
+        if (disconnected) {
+            CloseSocketCheck(connect_socket);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting) {
+    string error = "";
+
+    try {
+        msg = GetMess(msg);
+    } catch (const exception& e) {
+        error = e.what();
+    }
+
+    if (StartConnection(connect_socket, setting) == 1) return;
+    string jsonStr = msg.toJson();
+
+    if (disconnected) return;  // проверка на отключение перед отправкой
+
+    if (error == "") {
+        SendMessageAndMessageSize(connect_socket, jsonStr);
+    } else {
+        SendMessageAndMessageSize(connect_socket, error);
+    }
+
+    if (disconnected) return;  // проверка на отключение перед отправкой
+
+    try {
+        if (ensure_file_has_int(kFileName, msg.header.agent_id))
+            cout << "id save." << endl;
+    } catch (const exception& e) {
+        error = e.what();
+        SendMessageAndMessageSize(connect_socket, error);
+    }
+    disconnected = true;
 }
 
 int WinsockInit() {
@@ -146,8 +191,7 @@ void CloseSocketCheck(SOCKET& sck) {
     sck = INVALID_SOCKET;
 }
 
-void RecvMessage(SOCKET connect_socket, int32_t& id,
-                 atomic<bool>& disconnected) {
+void RecvMessage(SOCKET connect_socket, int32_t& id) {
     while (!disconnected) {
         char buf[kMaxBuf] = {};
         size_t bytes_received = recv(connect_socket, buf, kMaxBuf, 0);
@@ -162,8 +206,6 @@ void RecvMessage(SOCKET connect_socket, int32_t& id,
             disconnected = true;
             return;
         }
-        const char* filename = "id_file";
-        if (ensure_file_has_int(filename, id)) cout << "id save." << endl;
     }
 }
 

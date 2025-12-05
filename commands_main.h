@@ -5,9 +5,13 @@
 
 #include <atomic>
 #include <string>
+#include "transport/transport.h"
 
 int SendMessages();
-
+void Registration(SOCKET& connect_socket, Message& msg,
+                  const Settings& setting);
+int StartConnection(SOCKET& connect_socket, const Settings& setting);
+void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting);
 // инициализирует winsock
 int WinsockInit();
 SOCKET InitConnectSocket();
