@@ -1,1 +1,0 @@
-{"header":{"agent_id":0,"type":""},"payload":{"cpu":{"cores":0,"usage":0.0},"disks":[],"hardware":{"bios":"","cpu":"","mac":[],"video":[]},"ping":0,"ram":{"free_mb":0.0,"total_mb":0.0},"system":{"domain":"","hostname":"","timestamp":0,"version":""}}}

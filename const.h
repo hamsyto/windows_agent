@@ -7,7 +7,7 @@
 
 #include <cstdint> // для uint32_t
 
-inline constexpr const char* kFileName = "id_file";
+inline constexpr const char* kFileName = "id_file.txt";
 inline constexpr const char* kEnvFile = ".env";
 
 const uint32_t kMaxBuf = 1024;

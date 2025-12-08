@@ -10,11 +10,6 @@
 #include "commands_main.h"
 using namespace std;
 
-int SendMessages();
-void Registration();
-
-
-
 int main() {
 
     if (SendMessages() == 1) {

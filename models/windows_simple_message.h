@@ -79,6 +79,7 @@ struct Settings {
     int idle_time;          // как часто отправлять данные
     std::string ip_server;  // ip или dns адрес сервера куда отправлять
     int port_server;
+    unsigned int agentID = 0;
 };
 
 #endif

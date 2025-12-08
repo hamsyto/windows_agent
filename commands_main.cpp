@@ -30,46 +30,53 @@ atomic<bool> disconnected{true};
 int SendMessages() {
     if (WinsockInit() != 0) return 1;
 
-    Message msg = {};
+    Settings settings = {};
     // чтение или создание файла с id = 0
-    msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
+    settings.agentID = ReadOrCreateCounterFile(kFileName);
 
-    Settings setting = {};
-    if (!LoadEnvSettings(setting)) return 1;
-    cout << setting.ip_server << ":" << setting.port_server << endl;
+    if (!LoadEnvSettings(settings)) return 1;
+    cout << settings.ip_server << ":" << settings.port_server << endl;
 
     SOCKET connect_socket = INVALID_SOCKET;
 
     while (true) {
-        Registration(connect_socket, msg, setting);
-        SendData(connect_socket, msg, setting);
+        if (settings.agentID == 0) {
+            settings.agentID = Registration(connect_socket, settings);
+            disconnected = true;
+        } else {
+            SendData(connect_socket, settings);
+            disconnected = true;
+        }
     }
     return 1;
 }
 
-void Registration(SOCKET& connect_socket, Message& msg,
-                  const Settings& setting) {
-    SendData(connect_socket, msg, setting);
+// TODO: Создать файл и записать (переделать возврат функции на INT (agentID))
+unsigned int Registration(SOCKET& connect_socket, Settings& settings) {
+    SendData(connect_socket, settings);
 
-    int id = 0;
-    if (msg.header.agent_id == 0) {
-        RecvMessage(connect_socket, id);
-        if (id < 1) return;  // id знач не правильное
-        msg.header.agent_id = id;
-    }
+    unsigned int id = RecvMessage(connect_socket);
+    if (id < 1) return 0;  // Если id значение неправильное
+    settings.agentID = id;
 
-    string error = "";
+    // на случай если значение поменяется после перой итерации SendMessages()
+    // msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
+
     try {
-        if (ensure_file_has_int(kFileName, id)) cout << "id save." << endl;
+        if (ensure_file_has_int(kFileName, id))
+            cout << "id: " << id << " saved." << endl;
     } catch (const exception& e) {
-        error = e.what();
-        SendTypeMsgError(connect_socket, msg, error);
+        string error = e.what();
+        SendTypeMsgError(connect_socket, error, settings);
     }
+    return id;
 }
 
-void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting) {
-    if (StartConnection(connect_socket, setting) == 1) return;
-    string json_msg = msg.toJson();
+void SendData(SOCKET& connect_socket, Settings& settings) {
+    if (StartConnection(connect_socket, settings) == 1) return;
+
+    Message msg = {};
+    msg.header.agent_id = settings.agentID;
 
     string error = "";
     try {
@@ -77,30 +84,31 @@ void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting) {
     } catch (const exception& e) {
         error = e.what();
     }
-
+    string json_msg = msg.toJson();
     if (disconnected) return;  // проверка на отключение перед отправкой
 
     if (error == "") {
         SendMessageAndMessageSize(connect_socket, json_msg);
     } else {
-        SendTypeMsgError(connect_socket, msg, error);
+        SendTypeMsgError(connect_socket, error, settings);
     }
-    disconnected = true;
 }
 
-void SendTypeMsgError(SOCKET& connect_socket, Message& msg, string& error) {
+void SendTypeMsgError(SOCKET& connect_socket, string& error, Settings& settings) {
+    Message msg = {};
+    msg.header.agent_id = settings.agentID;
     msg.header.type = "error";
     msg.payload.error_text = error;
     string json_error = msg.toJson();
     SendMessageAndMessageSize(connect_socket, json_error);
 }
 
-int StartConnection(SOCKET& connect_socket, const Settings& setting) {
+int StartConnection(SOCKET& connect_socket, Settings& setting) {
     if (disconnected) {
         if (connect_socket != INVALID_SOCKET) {
             CloseSocketCheck(connect_socket);
             // паузы между подключениями
-            Sleep(setting.idle_time * 10000);
+            Sleep(setting.idle_time * 1000);
         }
         connect_socket = InitConnectSocket();
         if (connect_socket == INVALID_SOCKET) {
@@ -167,64 +175,63 @@ void CloseSocketCheck(SOCKET& sck) {
     sck = INVALID_SOCKET;
 }
 
-void RecvMessage(SOCKET connect_socket, int32_t& id) {
+unsigned int RecvMessage(SOCKET connect_socket) {
     while (!disconnected) {
         char buf[kMaxBuf] = {};
         size_t bytes_received = recv(connect_socket, buf, kMaxBuf, 0);
         if (bytes_received < 4) {  // минимум 4 байта для int32
             cout << "Connection closed or incomplete data." << endl;
             disconnected = true;
-            return;
+            return 0;
         }
-        int32_t value = network_buffer_to_int32(buf);
-        id = (value > 0 ? value : 0);
-        if (id == 0) {
-            disconnected = true;
-            return;
-        }
+        unsigned int id = network_buffer_to_int32(buf);
+        id = id > 0 ? id : 0;
+        if (id == 0) disconnected = true;
+        return id;
     }
+    return 0;
 }
 
-unsigned long ReadOrCreateCounterFile(const string& file_name) {
+unsigned int ReadOrCreateCounterFile(const string& file_name) {
     // Попытка прочитать файл
     ifstream in_file(file_name);
     string content;
-    unsigned long long value = 0;
+    unsigned int value = 0;
 
-    if (in_file.is_open()) {
-        getline(in_file, content);  // читаем до первого \n (или весь файл)
-        in_file.close();
-        // Удаляем начальные и конечные пробельные символы
-        size_t start = content.find_first_not_of(" \t\r\n");
-        // файл не пустой или не только пробелы
-        if (start != string::npos) {
-            size_t end = content.find_last_not_of(" \t\r\n");
-            string trimmed = content.substr(start, end - start + 1);
+    if (!in_file.is_open()) return 0;  //  Файл не найден
 
-            // Проверяем, что строка состоит только из цифр (и не начинается с
-            // '0', если не "0")
-            if (!trimmed.empty() &&
-                trimmed.find_first_not_of("0123456789") == string::npos) {
-                // Исключаем "0" и числа с ведущими нулями (кроме самого "0", но
-                // он нам не нужен)
-                if (trimmed != "0" && trimmed[0] != '0') {
-                    // Преобразуем
-                    istringstream iss(trimmed);
-                    if (iss >> value && value > 0) {
-                        // Успешно: корректное положительное число
-                        return value;
-                    }
-                }
-            }
-        }
+    getline(in_file, content);  // читаем до первого \n (или весь файл)
+    in_file.close();
+    // Удаляем начальные и конечные пробельные символы
+    size_t start = content.find_first_not_of(" \t\r\n");
+    // файл не пустой или не только пробелы
+    if (start == string::npos) return 0;
 
-        // Во всех остальных случаях — создаём/перезаписываем файл как "0"
-        ofstream outfile(file_name, ios::trunc);
-        if (outfile.is_open()) {
-            outfile << "0";
-            outfile.close();
+    size_t end = content.find_last_not_of(" \t\r\n");
+    string trimmed = content.substr(start, end - start + 1);
+
+    // Проверяем, что строка состоит только из цифр (и не начинается с
+    // '0', если не "0")
+    if (trimmed.empty()) return 0;
+    if (trimmed.find_first_not_of("0123456789") != string::npos) return 0;
+
+    // Исключаем "0" и числа с ведущими нулями (кроме самого "0", но
+    // он нам не нужен)
+    if (trimmed != "0" && trimmed[0] != '0') {
+        // Преобразуем
+        istringstream iss(trimmed);
+        if (iss >> value && value > 0) {
+            return value;
         }
     }
+
+    // Во всех остальных случаях — создаём/перезаписываем файл как "0"
+    ofstream outfile(file_name, ios::trunc);
+    if (outfile.is_open()) {
+        outfile << "0";
+        outfile.close();
+    }
+
     return value;
 }
 

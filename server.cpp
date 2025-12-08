@@ -1,6 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
 #include <windows.h>
+#include <winsock2.h>
 
 #include <array>
 #include <atomic>
@@ -137,9 +137,9 @@ int main() {
     }
 
     std::cout << "Server listening on " << kIpAddr << ":" << kPort << std::endl;
-
-    // Главный цикл приёма подключений
-    while (true) {
+    int x = 0;
+        // Главный цикл приёма подключений
+        while (true) {
         SOCKET clientSocket = accept(listenSocket, nullptr, nullptr);
         if (clientSocket == INVALID_SOCKET) {
             std::cerr << "accept() failed." << std::endl;
@@ -147,9 +147,12 @@ int main() {
         }
 
         std::cout << "Client connected." << std::endl;
-        //auto buffer = int32_to_network_bytes(10);
-        //send(clientSocket, buffer.data(), buffer.size(), 0);
-        // Обработка клиента в отдельном потоке (упрощённо — без управления
+        if (x == 0) {
+            auto buffer = int32_to_network_bytes(10);
+            send(clientSocket, buffer.data(), buffer.size(), 0);
+            x = 1;
+
+        }  // Обработка клиента в отдельном потоке (упрощённо — без управления
         // потоками)
         thread(HandleClient, clientSocket).detach();
     }
