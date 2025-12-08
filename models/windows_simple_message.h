@@ -11,17 +11,20 @@ struct Disk {
     double free_mb;   // Megabytes
     double total_mb;  // Megabytes
     bool is_hdd;      // Optional
+    bool fail_fill = false;
 };
 
 // объём оперативной памяти
 struct RAM {
     double free_mb;   // Megabytes
     double total_mb;  // Megabytes
+    bool fail_fill = false;
 };
 
 struct CPU {
     int cores;     // Потоки
     double usage;  // Использование 0 - 1
+    bool fail_fill = false;
 };
 
 struct OS {
@@ -29,6 +32,7 @@ struct OS {
     std::string domain;  // WORKGROUP
     std::string version;
     int timestamp;  // время в формате timestamp
+    bool fail_fill = false;
 };
 
 struct Hardware {
@@ -36,9 +40,11 @@ struct Hardware {
     std::string cpu;
     std::vector<std::string> mac;
     std::vector<std::string> video;  // видеоадаптер
+    bool fail_fill = false;
 };
 struct Ping {
-    DWORD ping_millisec; 
+    DWORD ping_millisec;
+    bool fail_fill = false;
 };
 
 enum class MessageType {
@@ -47,11 +53,12 @@ enum class MessageType {
 
 struct Message {
     struct Header {
-        unsigned long agent_id;   // пока рандом или 1-3
-        char type[64];  // SimplePCReport, whoami, error, IAmNotOK,
+        unsigned long agent_id;  // пока рандом или 1-3
+        std::string type;        // SimplePCReport, whoami, error, IAmNotOK,
     };
 
     struct SimplePCReport {
+        std::string error_text;
         std::vector<Disk> disks;
         RAM ram;
         CPU cpu;

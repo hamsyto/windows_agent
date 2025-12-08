@@ -1,25 +1,23 @@
 // commands_main.cpp
 
-#include <windows.h>
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
-
 // == ==
-
-#include <string>
-
+#include <windows.h>
 
 // == ==
 
 #include <algorithm>
 #include <atomic>
-#include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
+#include "collector/commands_coll.h"
 #include "commands_main.h"
 #include "const.h"
 #include "transport/transport.h"
@@ -33,8 +31,8 @@ int SendMessages() {
     if (WinsockInit() != 0) return 1;
 
     Message msg = {};
-    // чтение или создание файла с id
-    // msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
+    // чтение или создание файла с id = 0
+    msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
 
     Settings setting = {};
     if (!LoadEnvSettings(setting)) return 1;
@@ -46,28 +44,12 @@ int SendMessages() {
         Registration(connect_socket, msg, setting);
         SendData(connect_socket, msg, setting);
     }
+    return 1;
 }
 
 void Registration(SOCKET& connect_socket, Message& msg,
                   const Settings& setting) {
-    string error = "";
-
-    try {
-        msg = GetMess(msg);
-    } catch (const exception& e) {
-        error = e.what();
-    }
-
-    if (StartConnection(connect_socket, setting) == 1) return;
-    string jsonStr = msg.toJson();
-
-    if (disconnected) return;  // проверка на отключение перед отправкой
-
-    if (error == "") {
-        SendMessageAndMessageSize(connect_socket, jsonStr);
-    } else {
-        SendMessageAndMessageSize(connect_socket, error);
-    }
+    SendData(connect_socket, msg, setting);
 
     int id = 0;
     if (msg.header.agent_id == 0) {
@@ -76,15 +58,41 @@ void Registration(SOCKET& connect_socket, Message& msg,
         msg.header.agent_id = id;
     }
 
-    if (disconnected) return;  // проверка на отключение перед отправкой
-
+    string error = "";
     try {
         if (ensure_file_has_int(kFileName, id)) cout << "id save." << endl;
     } catch (const exception& e) {
         error = e.what();
-        SendMessageAndMessageSize(connect_socket, error);
+        SendTypeMsgError(connect_socket, msg, error);
+    }
+}
+
+void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting) {
+    if (StartConnection(connect_socket, setting) == 1) return;
+    string json_msg = msg.toJson();
+
+    string error = "";
+    try {
+        msg = GetMess(msg);
+    } catch (const exception& e) {
+        error = e.what();
+    }
+
+    if (disconnected) return;  // проверка на отключение перед отправкой
+
+    if (error == "") {
+        SendMessageAndMessageSize(connect_socket, json_msg);
+    } else {
+        SendTypeMsgError(connect_socket, msg, error);
     }
     disconnected = true;
+}
+
+void SendTypeMsgError(SOCKET& connect_socket, Message& msg, string& error) {
+    msg.header.type = "error";
+    msg.payload.error_text = error;
+    string json_error = msg.toJson();
+    SendMessageAndMessageSize(connect_socket, json_error);
 }
 
 int StartConnection(SOCKET& connect_socket, const Settings& setting) {
@@ -106,38 +114,6 @@ int StartConnection(SOCKET& connect_socket, const Settings& setting) {
         }
     }
     return 0;
-}
-
-void SendData(SOCKET& connect_socket, Message& msg, const Settings& setting) {
-    string error = "";
-
-    try {
-        msg = GetMess(msg);
-    } catch (const exception& e) {
-        error = e.what();
-    }
-
-    if (StartConnection(connect_socket, setting) == 1) return;
-    string jsonStr = msg.toJson();
-
-    if (disconnected) return;  // проверка на отключение перед отправкой
-
-    if (error == "") {
-        SendMessageAndMessageSize(connect_socket, jsonStr);
-    } else {
-        SendMessageAndMessageSize(connect_socket, error);
-    }
-
-    if (disconnected) return;  // проверка на отключение перед отправкой
-
-    try {
-        if (ensure_file_has_int(kFileName, msg.header.agent_id))
-            cout << "id save." << endl;
-    } catch (const exception& e) {
-        error = e.what();
-        SendMessageAndMessageSize(connect_socket, error);
-    }
-    disconnected = true;
 }
 
 int WinsockInit() {

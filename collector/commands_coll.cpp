@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -40,11 +41,6 @@
 #include "commands_coll.h"
 
 using namespace std;
-
-
-
-
-
 
 unordered_map<string, string> ClearEnvFile() {
     ifstream file(kEnvFile);  // ищет .env файл
@@ -83,6 +79,13 @@ unordered_map<string, string> ClearEnvFile() {
     return env_map;
 }
 
+string Trim(const string& str) {
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == string::npos) return "";
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
+
 bool LoadEnvSettings(Settings& out) {
     unordered_map<string, string> env_map = ClearEnvFile();
 
@@ -106,157 +109,21 @@ bool LoadEnvSettings(Settings& out) {
     return true;
 }
 
-string Trim(const string& str) {
-    size_t start = str.find_first_not_of(" \t\r\n");
-    if (start == string::npos) return "";
-    size_t end = str.find_last_not_of(" \t\r\n");
-    return str.substr(start, end - start + 1);
-}
-
-Disk FillDiskInfo(int diskIndex) {
-    Disk disk = {};
-    disk.is_hdd = IsHDD(diskIndex);
-    disk.total_mb =
-        static_cast<double>(GetPhysicalDiskSize(diskIndex)) / (1024.0 * 1024.0);
-    disk.total_mb = round(disk.total_mb * 100.0) / 100.0;
-
-    ULONGLONG totalFree = 0;
-    unordered_set<string> processed;
-    char volumeName[MAX_PATH];
-
-    HANDLE hFind = FindFirstVolumeA(volumeName, MAX_PATH);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        disk.free_mb = 0.0;
-        return disk;
+// Вспомогательная функция: нормализация пути тома для CreateFile
+string NormalizeVolumeName(const char* rawName) {
+    string name(rawName);
+    if (!name.empty() && name.back() != '\\') {
+        name += '\\';
     }
-
-    do {
-        if (processed.count(volumeName)) continue;
-        processed.insert(volumeName);
-
-        // КРИТИЧЕСКИ ВАЖНО: добавить завершающий '\'
-        size_t len = strlen(volumeName);
-        if (len > 0 && len < MAX_PATH - 1 && volumeName[len - 1] != '\\') {
-            volumeName[len] = '\\';
-            volumeName[len + 1] = '\0';
-        }
-
-        HANDLE hVol =
-            CreateFileA(volumeName, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        nullptr, OPEN_EXISTING, 0, nullptr);
-        if (hVol == INVALID_HANDLE_VALUE) {
-            continue;
-        }
-
-        // Получаем привязку к физическим дискам
-        DWORD bytesReturned = 0;
-        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                             nullptr, 0, nullptr, 0, &bytesReturned, nullptr)) {
-            if (GetLastError() != ERROR_MORE_DATA) {
-                CloseHandle(hVol);
-                continue;
-            }
-        }
-
-        PVOLUME_DISK_EXTENTS extents =
-            static_cast<PVOLUME_DISK_EXTENTS>(malloc(bytesReturned));
-        if (!extents) {
-            CloseHandle(hVol);
-            continue;
-        }
-
-        bool success =
-            DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, nullptr,
-                            0, extents, bytesReturned, &bytesReturned, nullptr);
-
-        bool belongs = false;
-        if (success && extents->NumberOfDiskExtents > 0) {
-            for (DWORD i = 0; i < extents->NumberOfDiskExtents; ++i) {
-                if (static_cast<int>(extents->Extents[i].DiskNumber) ==
-                    diskIndex) {
-                    belongs = true;
-                    break;
-                }
-            }
-        }
-        free(extents);
-        CloseHandle(hVol);
-
-        if (!belongs) continue;
-
-        // Получаем точки монтирования (C:\, D:\, или другие пути)
-        char mountPaths[MAX_PATH * 4] = {};
-        DWORD charCount = 0;
-        if (GetVolumePathNamesForVolumeNameA(volumeName, mountPaths,
-                                             sizeof(mountPaths), &charCount)) {
-            char* p = mountPaths;
-            while (*p) {
-                ULARGE_INTEGER freeBytes = {};
-                if (GetDiskFreeSpaceExA(p, &freeBytes, nullptr, nullptr)) {
-                    totalFree += freeBytes.QuadPart;
-                }
-                p += strlen(p) + 1;
-            }
-        }
-    } while (FindNextVolumeA(hFind, volumeName, MAX_PATH));
-
-    ULARGE_INTEGER freeBytes = {};
-    FindVolumeClose(hFind);
-
-    // Fallback: если ничего не найдено, но это системный диск
-    if (totalFree == 0 && diskIndex == 0) {
-        ULARGE_INTEGER freeBytes = {};
-        if (GetDiskFreeSpaceExA("C:\\", &freeBytes, nullptr, nullptr)) {
-            totalFree = freeBytes.QuadPart;
-        }
-    }
-
-    disk.free_mb = static_cast<double>(totalFree) / (1024.0 * 1024.0);
-    disk.free_mb = round(disk.free_mb * 100.0) / 100.0;
-    return disk;
-}
-
-bool IsHDD(int diskIndex) {
-    char path[64];
-    snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
-    HANDLE hDevice = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                 nullptr, OPEN_EXISTING, 0, nullptr);
-    if (hDevice == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-
-    STORAGE_PROPERTY_QUERY query = {};
-    query.PropertyId = StorageDeviceProperty;
-    query.QueryType = PropertyStandardQuery;
-
-    BYTE buffer[1024] = {};
-    DWORD bytesReturned = 0;
-    bool success = DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY,
-                                   &query, sizeof(query), buffer,
-                                   sizeof(buffer), &bytesReturned, nullptr);
-    CloseHandle(hDevice);
-
-    // STORAGE_BUS_TYPE находится по смещению 12
-    if (bytesReturned >= 16) {
-        STORAGE_BUS_TYPE busType =
-            *reinterpret_cast<STORAGE_BUS_TYPE*>(buffer + 12);
-        if (busType == BusTypeNvme || busType == BusTypeUsb) {
-            return false;  // точно SSD или внешний — не HDD
-        }
-    }
-
-    ULONG rotationRate = *reinterpret_cast<ULONG*>(buffer + 40);
-    return (rotationRate != 0);  // true = HDD, false = SSD
+    return name;
 }
 
 ULONGLONG GetPhysicalDiskSize(int diskIndex) {
     char path[64];
     snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
 
-    HANDLE hDevice = CreateFileA(
-        path,
-        0,  // GENERIC_READ не обязателен для IOCTL_DISK_GET_DRIVE_GEOMETRY_EX
-        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE hDevice = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                 nullptr, OPEN_EXISTING, 0, nullptr);
 
     if (hDevice == INVALID_HANDLE_VALUE) {
         return 0;
@@ -269,13 +136,165 @@ ULONGLONG GetPhysicalDiskSize(int diskIndex) {
         DeviceIoControl(hDevice, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, nullptr, 0,
                         &geometry, sizeof(geometry), &bytesReturned, nullptr);
 
+    ULONGLONG size = success ? geometry.DiskSize.QuadPart : 0;
     CloseHandle(hDevice);
+    return size;
+}
 
-    if (!success) {
-        return 0;
+bool IsHDD(int diskIndex) {
+    char path[64];
+    snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
+
+    HANDLE hDevice = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                 nullptr, OPEN_EXISTING, 0, nullptr);
+    if (hDevice == INVALID_HANDLE_VALUE) {
+        return false;
     }
 
-    return geometry.DiskSize.QuadPart;
+    STORAGE_PROPERTY_QUERY query = {};
+    query.PropertyId = StorageDeviceProperty;
+    query.QueryType = PropertyStandardQuery;
+
+    DWORD size = 0;
+    if (!DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
+                         sizeof(query), nullptr, 0, &size, nullptr) &&
+        GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        CloseHandle(hDevice);
+        return false;
+    }
+
+    if (size == 0) {
+        CloseHandle(hDevice);
+        return false;
+    }
+
+    auto buffer = make_unique<BYTE[]>(size);
+    auto* desc = reinterpret_cast<PSTORAGE_DEVICE_DESCRIPTOR>(buffer.get());
+
+    if (!DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
+                         sizeof(query), desc, size, &size, nullptr)) {
+        CloseHandle(hDevice);
+        return false;
+    }
+
+    CloseHandle(hDevice);
+
+    // Определяем по BusType
+    switch (desc->BusType) {
+        case BusTypeAtapi:
+        case BusTypeAta:
+            // ATA/ATAPI — может быть и HDD, и SSD. Без RotationRate —
+            // предполагаем HDD.
+            return true;
+        case BusTypeUsb:
+        case BusTypeNvme:
+        case BusTypeSas:
+        case BusTypeSata:
+        default:
+            // NVMe, USB, SAS — почти всегда SSD или внешние
+            // SATA — в современных системах чаще SSD, но если хотите точнее —
+            // без RotationRate не получится
+            return false;
+    }
+}
+
+Disk FillDiskInfo(int diskIndex) {
+    Disk disk = {};
+    disk.total_mb = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
+                          (1024.0 * 1024.0) * 100.0) /
+                    100.0;
+    disk.is_hdd = IsHDD(diskIndex);
+
+    ULONGLONG totalFree = 0;
+    unordered_set<string> processedVolumes;
+
+    char volumeName[MAX_PATH];
+    HANDLE hFind = FindFirstVolumeA(volumeName, MAX_PATH);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        disk.free_mb = 0.0;
+        return disk;
+    }
+
+    do {
+        string vol = NormalizeVolumeName(volumeName);
+        if (processedVolumes.count(vol)) continue;
+        processedVolumes.insert(vol);
+
+        HANDLE hVol =
+            CreateFileA(vol.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        nullptr, OPEN_EXISTING, 0, nullptr);
+        if (hVol == INVALID_HANDLE_VALUE) {
+            continue;
+        }
+
+        // Получаем привязку тома к физическим дискам
+        DWORD bytesReturned = 0;
+        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                             nullptr, 0, nullptr, 0, &bytesReturned, nullptr)) {
+            if (GetLastError() != ERROR_MORE_DATA) {
+                CloseHandle(hVol);
+                continue;
+            }
+        }
+
+        auto extentsBuf = make_unique<BYTE[]>(bytesReturned);
+        auto* extents =
+            reinterpret_cast<PVOLUME_DISK_EXTENTS>(extentsBuf.get());
+
+        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                             nullptr, 0, extents, bytesReturned, &bytesReturned,
+                             nullptr)) {
+            CloseHandle(hVol);
+            continue;
+        }
+
+        bool belongs = false;
+        if (extents->NumberOfDiskExtents > 0) {
+            for (DWORD i = 0; i < extents->NumberOfDiskExtents; ++i) {
+                if (static_cast<int>(extents->Extents[i].DiskNumber) ==
+                    diskIndex) {
+                    belongs = true;
+                    break;
+                }
+            }
+        }
+
+        CloseHandle(hVol);
+        if (!belongs) continue;
+
+        // Попытка получить буквы/пути монтирования
+        char mountPaths[MAX_PATH * 4] = {};
+        DWORD bufferSize = sizeof(mountPaths);
+        if (GetVolumePathNamesForVolumeNameA(vol.c_str(), mountPaths,
+                                             bufferSize, &bufferSize)) {
+            char* p = mountPaths;
+            while (*p) {
+                ULARGE_INTEGER freeBytesAvailable;
+                if (GetDiskFreeSpaceExA(p, &freeBytesAvailable, nullptr,
+                                        nullptr)) {
+                    totalFree += freeBytesAvailable.QuadPart;
+                }
+                p += strlen(p) + 1;
+            }
+        }
+        // Если нет путей монтирования (например, только как папка),
+        // GetVolumePathNamesForVolumeNameA может не вернуть ничего. Но это
+        // редкий случай, и без букв/папок мы не можем измерить свободное место.
+    } while (FindNextVolumeA(hFind, volumeName, MAX_PATH));
+
+    FindVolumeClose(hFind);
+
+    // Fallback: если ничего не найдено, но это диск 0 — пробуем C:\
+    if (totalFree == 0 && diskIndex == 0) {
+    ULARGE_INTEGER freeBytes;
+    if (GetDiskFreeSpaceExA("C:\\", &freeBytes, nullptr, nullptr)) {
+        totalFree = freeBytes.QuadPart;
+    }
+
+    disk.free_mb =
+        round(static_cast<double>(totalFree) / (1024.0 * 1024.0) * 100.0) /
+        100.0;
+    return disk;
 }
 
 string GetOsVersionName() {
@@ -627,7 +646,6 @@ DWORD getAveragePing(const char* host, int attempts) {
     // Инициализация Winsock (требуется для inet_addr / getaddrinfo)
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return 0;
-    
 
     // Преобразуем имя хоста в IP-адрес
     ADDRINFOA hints = {};

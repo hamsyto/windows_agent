@@ -24,19 +24,22 @@ using namespace std;
 
 vector<Disk> GetDisks() {
     vector<Disk> disks;
-    for (int i = 0;; ++i) {
+    for (int i = 0; ; ++i) {
         char path[64];
         snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", i);
-        HANDLE hDevice =
-            CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                        OPEN_EXISTING, 0, nullptr);
+
+        HANDLE hDevice = CreateFileA(path, 0,
+                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                     nullptr, OPEN_EXISTING, 0, nullptr);
+
         if (hDevice == INVALID_HANDLE_VALUE) {
             if (GetLastError() == ERROR_FILE_NOT_FOUND) {
-                break;  // больше дисков нет
+                break; // больше физических дисков нет
             }
-            continue;  // пропустить недоступные
+            continue; // пропустить недоступные
         }
         CloseHandle(hDevice);
+
         disks.push_back(FillDiskInfo(i));
     }
     return disks;

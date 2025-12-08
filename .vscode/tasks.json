@@ -41,6 +41,7 @@
                 "commands_main.cpp",
                 "collector\\collectorr.cpp",
                 "collector\\commands_coll.cpp",
+                "transport\\transport.cpp",
                 "-o",
                 "compiled\\main.exe",
                 "-lws2_32",

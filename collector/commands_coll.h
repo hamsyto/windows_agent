@@ -6,21 +6,23 @@
 #include <Wbemidl.h>  // содержит объявление BSTR, IWbemLocator и т.д.
 
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "../models/windows_simple_message.h"
 
-// УниверсФунк читает и чистит .env
-std::unordered_map<std::string, std::string> ClearEnvFile() ;
-// Прочитать .env и заполнить Settings
+// УниверсФунк читает и чистит .env от комментариев и символов
+std::unordered_map<std::string, std::string> ClearEnvFile();
+// читает .env и заполняет Settings
 bool LoadEnvSettings(Settings& out);
 
+std::string NormalizeVolumeName(const char* rawName);
 Disk FillDiskInfo(int diskIndex);
 // Вспомогательная: определить тип диска (HDD/SSD)
 bool IsHDD(int diskIndex);
 // Вспомогательная: получить общий размер физического диска
 ULONGLONG GetPhysicalDiskSize(int diskIndex);
+
 std::string GetOsVersionName();
 std::string get_computer_domain_or_workgroup();
 double GetCPUUsage();
@@ -34,6 +36,5 @@ std::vector<std::string> getVideoAdapters();
 DWORD getAveragePing(const char* host, int attempts = 3);
 // Вспомогательная функция: обрезать пробелы по краям
 std::string Trim(const std::string& str);
-
 
 #endif
