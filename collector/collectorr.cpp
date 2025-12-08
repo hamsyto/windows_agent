@@ -6,10 +6,12 @@
 // HDD+SSD (free + total)
 // Здесь по 1 функции на каждую модель данных, каждая собирает своё и возвращает
 // свой тип данных
-#include "collectorr.h"
 
-#include <VersionHelpers.h>
+#include <winsock2.h>
+// порядок подключения
 #include <windows.h>
+//
+#include <VersionHelpers.h>
 #include <winioctl.h>
 
 #include <cmath>
@@ -18,25 +20,26 @@
 #include <unordered_set>
 #include <vector>
 
+#include "collectorr.h"
 #include "commands_coll.h"
 
 using namespace std;
 
 vector<Disk> GetDisks() {
     vector<Disk> disks;
-    for (int i = 0; ; ++i) {
+    for (int i = 0;; ++i) {
         char path[64];
         snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", i);
 
-        HANDLE hDevice = CreateFileA(path, 0,
-                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                     nullptr, OPEN_EXISTING, 0, nullptr);
+        HANDLE hDevice =
+            CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                        OPEN_EXISTING, 0, nullptr);
 
         if (hDevice == INVALID_HANDLE_VALUE) {
             if (GetLastError() == ERROR_FILE_NOT_FOUND) {
-                break; // больше физических дисков нет
+                break;  // больше физических дисков нет
             }
-            continue; // пропустить недоступные
+            continue;  // пропустить недоступные
         }
         CloseHandle(hDevice);
 

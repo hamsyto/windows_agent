@@ -6,23 +6,22 @@
 
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
+
 #include <winsock2.h>
-//=====
+// порядок подключения
 #include <windows.h>
-//===
+// специализированные заголовки Windows
 #include <VersionHelpers.h>
-#include <winbase.h>
 #include <winioctl.h>
 
-#include <cstdint>
 #include <string>
 
 #include "../collector/collectorr.h"
-// #include "../collector/commands_coll.h"
 
 // сборка всех даыннх в одно сообщение
 Message GetMess(Message& msg);
 // отправляет сначала длину потом само сообщение
-void SendMessageAndMessageSize(SOCKET& client_socket, const std::string& jsonStr);
+void SendMessageAndMessageSize(SOCKET& client_socket,
+                               const std::string& jsonStr);
 
 #endif

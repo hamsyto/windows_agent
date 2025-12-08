@@ -4,10 +4,12 @@
 #define COMMANDS_MAIN_H
 
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
-// == ==
+// порядок подключения
 #include <windows.h>
 
+#include <cstdint>
 #include <string>
+
 #include "transport/transport.h"
 
 int SendMessages();
@@ -16,7 +18,8 @@ void SendData(SOCKET& connect_socket, Settings& setting);
 int StartConnection(SOCKET& connect_socket, Settings& setting);
 void SendData(SOCKET& connect_socket, Settings& setting);
 // задаёт тип сообщениия error и отправляет json с текстом ошибки
-void SendTypeMsgError(SOCKET& connect_socket, std::string& error, Settings& settings);
+void SendTypeMsgError(SOCKET& connect_socket, std::string& error,
+                      Settings& settings);
 // инициализирует winsock
 int WinsockInit();
 

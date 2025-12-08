@@ -1,30 +1,28 @@
 // commands_main.cpp
 
 #include <winsock2.h>  // для WSADATA, WSAStartup, socket, bind, listen, connect, htons
-// == ==
+// порядок подключения
 #include <windows.h>
 
 // == ==
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <thread>
+// #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "collector/commands_coll.h"
 #include "commands_main.h"
+#include "connection.h"
 #include "const.h"
 #include "transport/transport.h"
 
 using namespace std;
-
-atomic<bool> disconnected{true};
 
 //  ConnectServer
 int SendMessages() {
@@ -37,15 +35,13 @@ int SendMessages() {
     if (!LoadEnvSettings(settings)) return 1;
     cout << settings.ip_server << ":" << settings.port_server << endl;
 
-    SOCKET connect_socket = INVALID_SOCKET;
+    Connection connection = Connection(settings);
 
     while (true) {
         if (settings.agentID == 0) {
-            settings.agentID = Registration(connect_socket, settings);
-            disconnected = true;
+            settings.agentID = Registration(connection, settings);
         } else {
             SendData(connect_socket, settings);
-            disconnected = true;
         }
     }
     return 1;
@@ -94,7 +90,8 @@ void SendData(SOCKET& connect_socket, Settings& settings) {
     }
 }
 
-void SendTypeMsgError(SOCKET& connect_socket, string& error, Settings& settings) {
+void SendTypeMsgError(SOCKET& connect_socket, string& error,
+                      Settings& settings) {
     Message msg = {};
     msg.header.agent_id = settings.agentID;
     msg.header.type = "error";
@@ -279,7 +276,7 @@ bool ensure_file_has_int(const char* filename, int32_t expected_value) {
         }
     } catch (...) {
         // Ошибка парсинга — перезаписываем
-        return write_int_to_file(filename, expected_value);
+        return write_int_to_file(filename, expected_value);%
     }
 
     // Значения не совпадают — перезаписываем

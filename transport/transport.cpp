@@ -4,31 +4,22 @@
 // Функция 2, которая получает на вход сокет и сообщение, сереализует с помощью
 // функции 1 и отправляет в сокет.
 
-#ifndef TRANSPORT_H
-#define TRANSPORT_H
-
-#include "transport.h"
-
 #include <winsock2.h>
-//=====
+// порядок подключения
 #include <windows.h>
-//=====
+// специализированные заголовки Windows
 #include <VersionHelpers.h>
-#include <winbase.h>
 #include <winioctl.h>
 
 #include <cstdint>
 #include <iostream>
 #include <string>
-#include <unordered_set>
-#include <vector>
 
-#include "../collector/collectorr.h"
-#include "../collector/commands_coll.h"
 #include "../const.h"
 #include "nlohmann/json.hpp"
+#include "transport.h"
 
-   using json = nlohmann::json;
+using json = nlohmann::json;
 using namespace std;
 
 Message GetMess(Message& msg) {
@@ -120,5 +111,3 @@ void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
         return;
     }
 }
-
-#endif

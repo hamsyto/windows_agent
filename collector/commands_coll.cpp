@@ -3,25 +3,23 @@
 #define NET_API_STATUS DWORD
 
 //== 1 == Важен порядок
-#include <windows.h>
-//== 2 ==
 #include <winsock2.h>
+//== 2 ==
+#include <windows.h>
 //== 3 ==
 #include <ws2tcpip.h>
 
-// === Заголовки NetAPI ===
+// NetAPI
 #include <lmapibuf.h>  // объявляет NetApiBufferFree
 #include <lmerr.h>     // определяет NERR_Success (как DWORD)
 #include <lmjoin.h>    // объявляет NetGetJoinInformation
 
 //== 1 == Важен порядок
-#include <ipexport.h>
-//== 2 ==
 #include <iphlpapi.h>
-//== 3 ==
+//== 2 ==
 #include <icmpapi.h>
 
-// === Другие заголовки ===
+// Windows API
 #include <VersionHelpers.h>
 #include <Wbemidl.h>
 #include <intrin.h>
