@@ -53,8 +53,8 @@ RAM GetRam() {
 
     ULONGLONG mem_KB = 0;
     if (GetPhysicallyInstalledSystemMemory(&mem_KB)) {
-        mem_MB.total_mb = mem_KB / 1024.0;
-        mem_MB.total_mb = round(mem_MB.total_mb * 100.0) / 100.0;
+        mem_MB.total = mem_KB / 1024.0;
+        mem_MB.total = round(mem_MB.total * 100.0) / 100.0;
     }
     MEMORYSTATUSEX mem_byte = {};
     // установка версии структуры для обратной совместимости

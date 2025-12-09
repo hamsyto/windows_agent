@@ -7,23 +7,26 @@
 #include <vector>
 
 struct Disk {
+    // usage и total
     double free_mb;   // Megabytes
-    double total_mb;  // Megabytes
+    double total;  // Megabytes
     bool is_hdd;      // Optional
-    bool fail_fill = false;
+};
+
+struct USB {
+    double usege;
+    double total;
 };
 
 // объём оперативной памяти
 struct RAM {
     double free_mb;   // Megabytes
-    double total_mb;  // Megabytes
-    bool fail_fill = false;
+    double total;  // Megabytes
 };
 
 struct CPU {
     int cores;     // Потоки
     double usage;  // Использование 0 - 1
-    bool fail_fill = false;
 };
 
 struct OS {
@@ -31,7 +34,6 @@ struct OS {
     std::string domain;  // WORKGROUP
     std::string version;
     int timestamp;  // время в формате timestamp
-    bool fail_fill = false;
 };
 
 struct Hardware {
@@ -39,11 +41,9 @@ struct Hardware {
     std::string cpu;
     std::vector<std::string> mac;
     std::vector<std::string> video;  // видеоадаптер
-    bool fail_fill = false;
 };
 struct Ping {
     DWORD ping_millisec;
-    bool fail_fill = false;
 };
 
 enum class MessageType {
@@ -59,6 +59,7 @@ struct Message {
     struct SimplePCReport {
         std::string error_text;
         std::vector<Disk> disks;
+        std::vector<USB> usb;
         RAM ram;
         CPU cpu;
         OS system;
@@ -77,8 +78,7 @@ struct Message {
 struct Settings {
     int idle_time;          // как часто отправлять данные
     std::string ip_server;  // ip или dns адрес сервера куда отправлять
-    int port_server;
-    unsigned int agentID = 0;
+    int port_server;        // port сервера
 };
 
 #endif

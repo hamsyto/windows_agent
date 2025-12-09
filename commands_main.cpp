@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cstdint>
+// #include <filesystem>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -18,8 +20,8 @@
 
 #include "collector/commands_coll.h"
 #include "commands_main.h"
-#include "connection.h"
 #include "const.h"
+#include "models/connection.h"
 #include "transport/transport.h"
 
 using namespace std;
@@ -29,17 +31,14 @@ int SendMessages() {
     if (WinsockInit() != 0) return 1;
 
     Settings settings = {};
-    // чтение или создание файла с id = 0
-    settings.agentID = ReadOrCreateCounterFile(kFileName);
-
     if (!LoadEnvSettings(settings)) return 1;
     cout << settings.ip_server << ":" << settings.port_server << endl;
 
-    Connection connection = Connection(settings);
+    Connection connect_socket;
 
     while (true) {
-        if (settings.agentID == 0) {
-            settings.agentID = Registration(connection, settings);
+        if (connect_socket.agent_id == 0) {
+            connect_socket.agent_id = Registration(connect_socket, settings);
         } else {
             SendData(connect_socket, settings);
         }
@@ -47,32 +46,28 @@ int SendMessages() {
     return 1;
 }
 
-// TODO: Создать файл и записать (переделать возврат функции на INT (agentID))
-unsigned int Registration(SOCKET& connect_socket, Settings& settings) {
+// TODO: Создать файл и записать (переделать возврат функции на INT (agent_id))
+int32_t Registration(Connection& connect_socket, Settings& settings) {
     SendData(connect_socket, settings);
 
-    unsigned int id = RecvMessage(connect_socket);
-    if (id < 1) return 0;  // Если id значение неправильное
-    settings.agentID = id;
-
-    // на случай если значение поменяется после перой итерации SendMessages()
-    // msg.header.agent_id = ReadOrCreateCounterFile(kFileName);
+    uint32_t id = RecvMessage(connect_socket);
+    if (connect_socket.connected == false) return 1;
 
     try {
-        if (ensure_file_has_int(kFileName, id))
-            cout << "id: " << id << " saved." << endl;
+        if (connect_socket.SaveAgentID(id))
+            cout << "ID: " << connect_socket.agent_id << " saved\n";
     } catch (const exception& e) {
         string error = e.what();
-        SendTypeMsgError(connect_socket, error, settings);
+        SendTypeMsgError(connect_socket, error);
     }
     return id;
 }
 
-void SendData(SOCKET& connect_socket, Settings& settings) {
-    if (StartConnection(connect_socket, settings) == 1) return;
+void SendData(Connection& connect_socket, Settings& settings) {
+    connect_socket.Connect(settings);
 
     Message msg = {};
-    msg.header.agent_id = settings.agentID;
+    msg.header.agent_id = connect_socket.agent_id;
 
     string error = "";
     try {
@@ -81,44 +76,23 @@ void SendData(SOCKET& connect_socket, Settings& settings) {
         error = e.what();
     }
     string json_msg = msg.toJson();
-    if (disconnected) return;  // проверка на отключение перед отправкой
+    if (!connect_socket.connected)
+        return;  // проверка на отключение перед отправкой
 
     if (error == "") {
-        SendMessageAndMessageSize(connect_socket, json_msg);
+        SendMessageAndMessageSize(connect_socket.socket, json_msg);
     } else {
-        SendTypeMsgError(connect_socket, error, settings);
+        SendTypeMsgError(connect_socket, error);
     }
 }
 
-void SendTypeMsgError(SOCKET& connect_socket, string& error,
-                      Settings& settings) {
+void SendTypeMsgError(Connection& connect_socket, string& error) {
     Message msg = {};
-    msg.header.agent_id = settings.agentID;
+    msg.header.agent_id = connect_socket.agent_id;
     msg.header.type = "error";
     msg.payload.error_text = error;
     string json_error = msg.toJson();
-    SendMessageAndMessageSize(connect_socket, json_error);
-}
-
-int StartConnection(SOCKET& connect_socket, Settings& setting) {
-    if (disconnected) {
-        if (connect_socket != INVALID_SOCKET) {
-            CloseSocketCheck(connect_socket);
-            // паузы между подключениями
-            Sleep(setting.idle_time * 1000);
-        }
-        connect_socket = InitConnectSocket();
-        if (connect_socket == INVALID_SOCKET) {
-            cout << "connect_socket don't init" << endl;
-            return 1;
-        }
-        ConnectServer(connect_socket);
-        if (disconnected) {
-            CloseSocketCheck(connect_socket);
-            return 1;
-        }
-    }
-    return 0;
+    SendMessageAndMessageSize(connect_socket.socket, json_error);
 }
 
 int WinsockInit() {
@@ -146,23 +120,20 @@ SOCKET InitConnectSocket() {
     return connect_socket;
 }
 
-void ConnectServer(SOCKET connect_socket) {
-    Settings setting = {};
-    if (!LoadEnvSettings(setting)) return;
+int ConnectServer(SOCKET& socket, Settings& settings) {
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     // преобразует 16-битное число в сетевой порядок
-    addr.sin_port = htons(setting.port_server);
-    addr.sin_addr.s_addr = inet_addr(setting.ip_server.c_str());  //
+    addr.sin_port = htons(settings.port_server);
+    addr.sin_addr.s_addr = inet_addr(settings.ip_server.c_str());
 
-    if (connect(connect_socket, reinterpret_cast<struct sockaddr*>(&addr),
+    if (connect(socket, reinterpret_cast<struct sockaddr*>(&addr),
                 sizeof(addr)) != 0) {
         cout << "connect() failed with error: " << WSAGetLastError() << endl;
-        disconnected = true;
-        return;
+        return -1;
     }
     cout << "connect to server :) " << endl;
-    disconnected = false;
+    return 1;
 }
 
 void CloseSocketCheck(SOCKET& sck) {
@@ -172,21 +143,39 @@ void CloseSocketCheck(SOCKET& sck) {
     sck = INVALID_SOCKET;
 }
 
-unsigned int RecvMessage(SOCKET connect_socket) {
-    while (!disconnected) {
-        char buf[kMaxBuf] = {};
-        size_t bytes_received = recv(connect_socket, buf, kMaxBuf, 0);
-        if (bytes_received < 4) {  // минимум 4 байта для int32
-            cout << "Connection closed or incomplete data." << endl;
-            disconnected = true;
-            return 0;
-        }
-        unsigned int id = network_buffer_to_int32(buf);
-        id = id > 0 ? id : 0;
-        if (id == 0) disconnected = true;
-        return id;
+uint32_t RecvMessage(Connection& connect_socket) {
+    char buf[kMaxBuf] = {};
+    uint32_t bytes_received = recv(connect_socket.socket, buf, kMaxBuf, 0);
+    if (bytes_received < 4) {  // минимум 4 байта для uint32
+        cout << "Connection closed or incomplete data." << endl;
+        connect_socket.connected = false;
+        return 0;
     }
-    return 0;
+    uint32_t id = NetworkBufferToUint32(buf);
+    id = id > 0 ? id : 0;
+    if (id == 0) connect_socket.connected = false;
+    connect_socket.connected = true;
+    return id;
+}
+
+void DeleteFileInCurrentDir(const string& fileName) {
+    // std::remove возвращает 0 при успехе, ненулевое значение — при ошибке
+    remove(fileName.c_str());
+}
+
+bool WriteIntToFile(const string& filename, uint32_t& id) {
+    ofstream file(filename);
+    if (!file) return false;
+    file << id;
+    return file.good();
+}
+
+uint32_t NetworkBufferToUint32(char* buffer) {
+    uint64_t net_value = 0;
+
+    memcpy(&net_value, buffer, sizeof(net_value));
+    auto result = static_cast<int32_t>(ntohl(net_value));
+    return result;
 }
 
 unsigned int ReadOrCreateCounterFile(const string& file_name) {
@@ -230,70 +219,4 @@ unsigned int ReadOrCreateCounterFile(const string& file_name) {
     }
 
     return value;
-}
-
-bool ensure_file_has_int(const char* filename, int32_t expected_value) {
-    ifstream file(filename);
-    if (!file) {
-        // Файл не существует — создаём и записываем
-        return write_int_to_file(filename, expected_value);
-    }
-
-    // Читаем весь файл как строку
-    string content((istreambuf_iterator<char>(file)),
-                   istreambuf_iterator<char>());
-    file.close();
-
-    // Проверяем: пустой или содержит не-цифры?
-    if (content.empty()) {
-        return write_int_to_file(filename, expected_value);
-    }
-
-    // Убеждаемся, что строка состоит ТОЛЬКО из цифр
-    for (char c : content) {
-        if (!isdigit(static_cast<unsigned char>(c))) {
-            // Недопустимый символ — перезаписываем
-            return write_int_to_file(filename, expected_value);
-        }
-    }
-
-    // Преобразуем строку в число
-    try {
-        // stoi может выбросить исключение при переполнении
-        size_t pos = 0;
-        long parsed = stol(content, &pos);
-        if (pos != content.size()) {
-            // Часть строки не распознана как число
-            return write_int_to_file(filename, expected_value);
-        }
-        if (parsed < INT32_MIN || parsed > INT32_MAX) {
-            return write_int_to_file(filename, expected_value);
-        }
-        int32_t current_value = static_cast<int32_t>(parsed);
-
-        if (current_value == expected_value) {
-            return true;  // уже совпадает — ничего не делаем
-        }
-    } catch (...) {
-        // Ошибка парсинга — перезаписываем
-        return write_int_to_file(filename, expected_value);%
-    }
-
-    // Значения не совпадают — перезаписываем
-    return write_int_to_file(filename, expected_value);
-}
-
-int64_t network_buffer_to_int32(char* buffer) {
-    int64_t net_value = 0;
-
-    memcpy(&net_value, buffer, sizeof(net_value));
-    auto result = static_cast<int32_t>(ntohl(net_value));
-    return result;
-}
-
-bool write_int_to_file(const char* filename, int32_t value) {
-    ofstream file(filename);
-    if (!file) return false;
-    file << value;
-    return file.good();
 }

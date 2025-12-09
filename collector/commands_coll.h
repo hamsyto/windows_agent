@@ -15,7 +15,7 @@
 std::unordered_map<std::string, std::string> ClearEnvFile();
 // читает .env и заполняет Settings
 bool LoadEnvSettings(Settings& out);
-
+// Вспомогательная функция: нормализация пути тома для CreateFile
 std::string NormalizeVolumeName(const char* rawName);
 Disk FillDiskInfo(int diskIndex);
 // Вспомогательная: определить тип диска (HDD/SSD)

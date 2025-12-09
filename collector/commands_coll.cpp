@@ -107,7 +107,6 @@ bool LoadEnvSettings(Settings& out) {
     return true;
 }
 
-// Вспомогательная функция: нормализация пути тома для CreateFile
 string NormalizeVolumeName(const char* rawName) {
     string name(rawName);
     if (!name.empty() && name.back() != '\\') {
@@ -198,7 +197,7 @@ bool IsHDD(int diskIndex) {
 
 Disk FillDiskInfo(int diskIndex) {
     Disk disk = {};
-    disk.total_mb = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
+    disk.total = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
                           (1024.0 * 1024.0) * 100.0) /
                     100.0;
     disk.is_hdd = IsHDD(diskIndex);

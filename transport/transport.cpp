@@ -45,6 +45,7 @@ string Message::toJson() const {
     // Заголовок
     j["header"] = {{"agent_id", header.agent_id}, {"type", header.type}};
 
+    // payload в случае ошибки
     if (header.type == "error") {
         j["payload"] = {{"error", payload.error_text}};
         return j.dump();
@@ -52,7 +53,7 @@ string Message::toJson() const {
 
     j["payload"] = {
         {"ram",
-         {{"total_mb", payload.ram.total_mb},
+         {{"total", payload.ram.total},
           {"free_mb", payload.ram.free_mb}}},
         {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
         {"system",
@@ -69,7 +70,7 @@ string Message::toJson() const {
         {"ping", payload.ping_m.ping_millisec}};
 
     for (const auto& disk : payload.disks) {
-        j["payload"]["disks"].push_back({{"total_mb", disk.total_mb},
+        j["payload"]["disks"].push_back({{"total", disk.total},
                                          {"free_mb", disk.free_mb},
                                          {"is_hdd", disk.is_hdd}});
     }
