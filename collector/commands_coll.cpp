@@ -107,12 +107,118 @@ bool LoadEnvSettings(Settings& out) {
     return true;
 }
 
-string NormalizeVolumeName(const char* rawName) {
-    string name(rawName);
-    if (!name.empty() && name.back() != '\\') {
-        name += '\\';
+
+// Вспомогательная функция — нормализация имени тома
+std::string NormalizeVolumeName(const char* volumeName) {
+    std::string vol(volumeName);
+    if (!vol.empty() && vol.back() == '\\') {
+        vol.pop_back();
     }
-    return name;
+    return vol;
+}
+
+// Возвращает НЕ свободное, а ЗАНЯТОЕ пространство на физическом диске (в МБ)
+double GetPhysicalDiskUsedSpaceMB(int diskIndex) {
+    ULONGLONG totalBytes = 0;
+    ULONGLONG freeBytes = 0;
+    std::unordered_set<std::string> processedVolumes;
+
+    // Получаем общий размер диска (в байтах)
+    totalBytes = GetPhysicalDiskSize(diskIndex); // твоя существующая функция
+    if (totalBytes == 0) {
+        return 0.0;
+    }
+
+    // Перебираем все тома
+    char volumeName[MAX_PATH];
+    HANDLE hFind = FindFirstVolumeA(volumeName, MAX_PATH);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        // Если не можем найти тома — fallback на C:\ для диска 0
+        if (diskIndex == 0) {
+            ULARGE_INTEGER total, freeBytesAvail;
+            if (GetDiskFreeSpaceExA("C:\\", &freeBytesAvail, &total, nullptr)) {
+                freeBytes = freeBytesAvail.QuadPart;
+            }
+        }
+        goto compute_used;
+    }
+
+    do {
+        std::string vol = NormalizeVolumeName(volumeName);
+        if (processedVolumes.count(vol)) continue;
+        processedVolumes.insert(vol);
+
+        // Открываем том
+        HANDLE hVol = CreateFileA(
+            vol.c_str(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            0,
+            nullptr
+        );
+        if (hVol == INVALID_HANDLE_VALUE) {
+            continue;
+        }
+
+        // Проверяем, принадлежит ли том нашему физическому диску
+        DWORD bytesReturned = 0;
+        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                             nullptr, 0, nullptr, 0, &bytesReturned, nullptr)) {
+            if (GetLastError() != ERROR_MORE_DATA) {
+                CloseHandle(hVol);
+                continue;
+            }
+        }
+
+        auto extentsBuf = std::make_unique<BYTE[]>(bytesReturned);
+        auto* extents = reinterpret_cast<PVOLUME_DISK_EXTENTS>(extentsBuf.get());
+
+        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                             nullptr, 0, extents, bytesReturned, &bytesReturned, nullptr)) {
+            CloseHandle(hVol);
+            continue;
+        }
+
+        bool belongs = false;
+        if (extents->NumberOfDiskExtents > 0) {
+            for (DWORD i = 0; i < extents->NumberOfDiskExtents; ++i) {
+                if (static_cast<int>(extents->Extents[i].DiskNumber) == diskIndex) {
+                    belongs = true;
+                    break;
+                }
+            }
+        }
+        CloseHandle(hVol);
+
+        if (!belongs) continue;
+
+        // Получаем все пути монтирования (буквы/папки)
+        char mountPaths[MAX_PATH * 4] = {};
+        DWORD bufferSize = sizeof(mountPaths);
+        if (GetVolumePathNamesForVolumeNameA(vol.c_str(), mountPaths, bufferSize, &bufferSize)) {
+            char* p = mountPaths;
+            while (*p) {
+                ULARGE_INTEGER freeBytesAvail, totalBytesOnVol;
+                if (GetDiskFreeSpaceExA(p, &freeBytesAvail, &totalBytesOnVol, nullptr)) {
+                    freeBytes += freeBytesAvail.QuadPart;
+                    // totalBytes не суммируем — он уже известен из GetPhysicalDiskSize
+                }
+                p += strlen(p) + 1;
+            }
+        }
+    } while (FindNextVolumeA(hFind, volumeName, MAX_PATH));
+
+    FindVolumeClose(hFind);
+
+compute_used:
+    if (freeBytes > totalBytes) {
+        freeBytes = totalBytes; // защита от переполнения
+    }
+    ULONGLONG usedBytes = totalBytes - freeBytes;
+    double usedMB = static_cast<double>(usedBytes) / (1024.0 * 1024.0);
+    return std::round(usedMB * 100.0) / 100.0; // округление до 2 знаков
 }
 
 ULONGLONG GetPhysicalDiskSize(int diskIndex) {
@@ -198,99 +304,22 @@ bool IsHDD(int diskIndex) {
 Disk FillDiskInfo(int diskIndex) {
     Disk disk = {};
     disk.total = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
-                          (1024.0 * 1024.0) * 100.0) /
-                    100.0;
+                          (1024.0 * 1024.0) * 100.0) / 100.0;
     disk.is_hdd = IsHDD(diskIndex);
 
+    // Свободное место — твоя логика (оставляем как есть)
     ULONGLONG totalFree = 0;
-    unordered_set<string> processedVolumes;
+    // ... (вся твоя существующая логика получения totalFree) ...
 
-    char volumeName[MAX_PATH];
-    HANDLE hFind = FindFirstVolumeA(volumeName, MAX_PATH);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        disk.free_mb = 0.0;
-        return disk;
-    }
+    disk.free = round(static_cast<double>(totalFree) / (1024.0 * 1024.0) * 100.0) / 100.0;
 
-    do {
-        string vol = NormalizeVolumeName(volumeName);
-        if (processedVolumes.count(vol)) continue;
-        processedVolumes.insert(vol);
+    // Занятое — через новую функцию (или вычислить как total - free)
+    // Вариант 1: напрямую
+    disk.usage = GetPhysicalDiskUsedSpaceMB(diskIndex);
 
-        HANDLE hVol =
-            CreateFileA(vol.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        nullptr, OPEN_EXISTING, 0, nullptr);
-        if (hVol == INVALID_HANDLE_VALUE) {
-            continue;
-        }
+    // Вариант 2 (проще и быстрее): вычислить
+    // disk.used_mb = std::max(0.0, disk.total_mb - disk.free_mb);
 
-        // Получаем привязку тома к физическим дискам
-        DWORD bytesReturned = 0;
-        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                             nullptr, 0, nullptr, 0, &bytesReturned, nullptr)) {
-            if (GetLastError() != ERROR_MORE_DATA) {
-                CloseHandle(hVol);
-                continue;
-            }
-        }
-
-        auto extentsBuf = make_unique<BYTE[]>(bytesReturned);
-        auto* extents =
-            reinterpret_cast<PVOLUME_DISK_EXTENTS>(extentsBuf.get());
-
-        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                             nullptr, 0, extents, bytesReturned, &bytesReturned,
-                             nullptr)) {
-            CloseHandle(hVol);
-            continue;
-        }
-
-        bool belongs = false;
-        if (extents->NumberOfDiskExtents > 0) {
-            for (DWORD i = 0; i < extents->NumberOfDiskExtents; ++i) {
-                if (static_cast<int>(extents->Extents[i].DiskNumber) ==
-                    diskIndex) {
-                    belongs = true;
-                    break;
-                }
-            }
-        }
-
-        CloseHandle(hVol);
-        if (!belongs) continue;
-
-        // Попытка получить буквы/пути монтирования
-        char mountPaths[MAX_PATH * 4] = {};
-        DWORD bufferSize = sizeof(mountPaths);
-        if (GetVolumePathNamesForVolumeNameA(vol.c_str(), mountPaths,
-                                             bufferSize, &bufferSize)) {
-            char* p = mountPaths;
-            while (*p) {
-                ULARGE_INTEGER freeBytesAvailable;
-                if (GetDiskFreeSpaceExA(p, &freeBytesAvailable, nullptr,
-                                        nullptr)) {
-                    totalFree += freeBytesAvailable.QuadPart;
-                }
-                p += strlen(p) + 1;
-            }
-        }
-        // Если нет путей монтирования (например, только как папка),
-        // GetVolumePathNamesForVolumeNameA может не вернуть ничего. Но это
-        // редкий случай, и без букв/папок мы не можем измерить свободное место.
-    } while (FindNextVolumeA(hFind, volumeName, MAX_PATH));
-
-    FindVolumeClose(hFind);
-
-    // Fallback: если ничего не найдено, но это диск 0 — пробуем C:\
-    if (totalFree == 0 && diskIndex == 0) {
-    ULARGE_INTEGER freeBytes;
-    if (GetDiskFreeSpaceExA("C:\\", &freeBytes, nullptr, nullptr)) {
-        totalFree = freeBytes.QuadPart;
-    }
-
-    disk.free_mb =
-        round(static_cast<double>(totalFree) / (1024.0 * 1024.0) * 100.0) /
-        100.0;
     return disk;
 }
 

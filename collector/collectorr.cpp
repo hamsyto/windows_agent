@@ -60,8 +60,8 @@ RAM GetRam() {
     // установка версии структуры для обратной совместимости
     mem_byte.dwLength = sizeof(mem_byte);
     if (GlobalMemoryStatusEx(&mem_byte)) {
-        mem_MB.free_mb = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
-        mem_MB.free_mb = round(mem_MB.free_mb * 100.0) / 100.0;
+        mem_MB.usage = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
+        mem_MB.usage = round(mem_MB.usage * 100.0) / 100.0;
     }
 
     return mem_MB;

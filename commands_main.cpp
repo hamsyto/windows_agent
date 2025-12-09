@@ -39,6 +39,7 @@ int SendMessages() {
     while (true) {
         if (connect_socket.agent_id == 0) {
             connect_socket.agent_id = Registration(connect_socket, settings);
+            cout << "ID: " << connect_socket.agent_id << " saved\n";
         } else {
             SendData(connect_socket, settings);
         }
@@ -54,13 +55,12 @@ int32_t Registration(Connection& connect_socket, Settings& settings) {
     if (connect_socket.connected == false) return 1;
 
     try {
-        if (connect_socket.SaveAgentID(id))
-            cout << "ID: " << connect_socket.agent_id << " saved\n";
+        if (connect_socket.SaveAgentID(id)) return id;
     } catch (const exception& e) {
         string error = e.what();
         SendTypeMsgError(connect_socket, error);
     }
-    return id;
+    return 1;
 }
 
 void SendData(Connection& connect_socket, Settings& settings) {

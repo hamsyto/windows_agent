@@ -8,7 +8,8 @@
 
 struct Disk {
     // usage и total
-    double free_mb;   // Megabytes
+    double usage;   // Megabytes
+    double free;  // Megabytes
     double total;  // Megabytes
     bool is_hdd;      // Optional
 };
@@ -20,7 +21,7 @@ struct USB {
 
 // объём оперативной памяти
 struct RAM {
-    double free_mb;   // Megabytes
+    double usage;   // Megabytes
     double total;  // Megabytes
 };
 

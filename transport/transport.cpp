@@ -54,7 +54,7 @@ string Message::toJson() const {
     j["payload"] = {
         {"ram",
          {{"total", payload.ram.total},
-          {"free_mb", payload.ram.free_mb}}},
+          {"usage", payload.ram.usage}}},
         {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
         {"system",
          {{"hostname", payload.system.hostname},
@@ -71,7 +71,7 @@ string Message::toJson() const {
 
     for (const auto& disk : payload.disks) {
         j["payload"]["disks"].push_back({{"total", disk.total},
-                                         {"free_mb", disk.free_mb},
+                                         {"usage", disk.usage},
                                          {"is_hdd", disk.is_hdd}});
     }
 

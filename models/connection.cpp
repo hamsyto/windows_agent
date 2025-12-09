@@ -26,7 +26,7 @@ Connection::Connection() {
 void Connection::Connect(Settings& settings) {
     if (socket != INVALID_SOCKET) {
         Disconnect();
-        Sleep(settings.idle_time * 10000);
+        Sleep(settings.idle_time * 1000);
     }
 
     socket = InitConnectSocket();
