@@ -24,18 +24,21 @@
             },
             "detail": "Задача создана отладчиком."
         },
-        //компиляция всех cpp
+        //компиляция всех cpp программы
         {
             "label": "Build with g++",
             "type": "shell",
             "command": "g++",
             "args": [
-                "-static-libgcc", 
+                //статическая линковка стандартной библиотеки
+                "-static-libgcc",
                 "-static-libstdc++",
-                "-DWIN32_LEAN_AND_MEAN", 
+                //
+                "-DWIN32_LEAN_AND_MEAN",
                 "-D_WIN32_WINNT=0x0A00",
                 "-DWINVER=0x0A00",
                 "-fdiagnostics-color=always",
+                // "-O2", // релиз
                 "-g",
                 "main.cpp",
                 "commands_main.cpp",

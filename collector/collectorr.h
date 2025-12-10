@@ -9,8 +9,9 @@
 #ifndef COLLECTORR_H
 #define COLLECTORR_H
 
+#include <vector>
+
 #include "../models/windows_simple_message.h"
-#include <vector> 
 
 std::vector<Disk> GetDisks();
 RAM GetRam();
@@ -19,4 +20,4 @@ OS GetOs();
 Hardware GetHardware();
 Ping GetPing();
 
-#endif 
+#endif

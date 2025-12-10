@@ -26,6 +26,7 @@
 #include <winioctl.h>
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -37,6 +38,9 @@
 
 #include "../const.h"
 #include "commands_coll.h"
+
+// === предложение нейронки: линковка WMI ===
+// #pragma comment(lib, "wbemuuid.lib")
 
 using namespace std;
 
@@ -107,141 +111,139 @@ bool LoadEnvSettings(Settings& out) {
     return true;
 }
 
-
 // Вспомогательная функция — нормализация имени тома
-std::string NormalizeVolumeName(const char* volumeName) {
-    std::string vol(volumeName);
+string NormalizeVolumeName(const char* volumeName) {
+    string vol(volumeName);
     if (!vol.empty() && vol.back() == '\\') {
         vol.pop_back();
     }
     return vol;
 }
 
-// Возвращает НЕ свободное, а ЗАНЯТОЕ пространство на физическом диске (в МБ)
-double GetPhysicalDiskUsedSpaceMB(int diskIndex) {
-    ULONGLONG totalBytes = 0;
-    ULONGLONG freeBytes = 0;
-    std::unordered_set<std::string> processedVolumes;
-
-    // Получаем общий размер диска (в байтах)
-    totalBytes = GetPhysicalDiskSize(diskIndex); // твоя существующая функция
-    if (totalBytes == 0) {
-        return 0.0;
-    }
-
-    // Перебираем все тома
-    char volumeName[MAX_PATH];
-    HANDLE hFind = FindFirstVolumeA(volumeName, MAX_PATH);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        // Если не можем найти тома — fallback на C:\ для диска 0
-        if (diskIndex == 0) {
-            ULARGE_INTEGER total, freeBytesAvail;
-            if (GetDiskFreeSpaceExA("C:\\", &freeBytesAvail, &total, nullptr)) {
-                freeBytes = freeBytesAvail.QuadPart;
-            }
-        }
-        goto compute_used;
-    }
-
-    do {
-        std::string vol = NormalizeVolumeName(volumeName);
-        if (processedVolumes.count(vol)) continue;
-        processedVolumes.insert(vol);
-
-        // Открываем том
-        HANDLE hVol = CreateFileA(
-            vol.c_str(),
-            0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            nullptr,
-            OPEN_EXISTING,
-            0,
-            nullptr
-        );
-        if (hVol == INVALID_HANDLE_VALUE) {
-            continue;
-        }
-
-        // Проверяем, принадлежит ли том нашему физическому диску
-        DWORD bytesReturned = 0;
-        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                             nullptr, 0, nullptr, 0, &bytesReturned, nullptr)) {
-            if (GetLastError() != ERROR_MORE_DATA) {
-                CloseHandle(hVol);
-                continue;
-            }
-        }
-
-        auto extentsBuf = std::make_unique<BYTE[]>(bytesReturned);
-        auto* extents = reinterpret_cast<PVOLUME_DISK_EXTENTS>(extentsBuf.get());
-
-        if (!DeviceIoControl(hVol, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                             nullptr, 0, extents, bytesReturned, &bytesReturned, nullptr)) {
-            CloseHandle(hVol);
-            continue;
-        }
-
-        bool belongs = false;
-        if (extents->NumberOfDiskExtents > 0) {
-            for (DWORD i = 0; i < extents->NumberOfDiskExtents; ++i) {
-                if (static_cast<int>(extents->Extents[i].DiskNumber) == diskIndex) {
-                    belongs = true;
-                    break;
-                }
-            }
-        }
-        CloseHandle(hVol);
-
-        if (!belongs) continue;
-
-        // Получаем все пути монтирования (буквы/папки)
-        char mountPaths[MAX_PATH * 4] = {};
-        DWORD bufferSize = sizeof(mountPaths);
-        if (GetVolumePathNamesForVolumeNameA(vol.c_str(), mountPaths, bufferSize, &bufferSize)) {
-            char* p = mountPaths;
-            while (*p) {
-                ULARGE_INTEGER freeBytesAvail, totalBytesOnVol;
-                if (GetDiskFreeSpaceExA(p, &freeBytesAvail, &totalBytesOnVol, nullptr)) {
-                    freeBytes += freeBytesAvail.QuadPart;
-                    // totalBytes не суммируем — он уже известен из GetPhysicalDiskSize
-                }
-                p += strlen(p) + 1;
-            }
-        }
-    } while (FindNextVolumeA(hFind, volumeName, MAX_PATH));
-
-    FindVolumeClose(hFind);
-
-compute_used:
-    if (freeBytes > totalBytes) {
-        freeBytes = totalBytes; // защита от переполнения
-    }
-    ULONGLONG usedBytes = totalBytes - freeBytes;
-    double usedMB = static_cast<double>(usedBytes) / (1024.0 * 1024.0);
-    return std::round(usedMB * 100.0) / 100.0; // округление до 2 знаков
-}
-
-ULONGLONG GetPhysicalDiskSize(int diskIndex) {
+uint64_t GetPhysicalDiskSize(int diskIndex) {
     char path[64];
     snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
 
-    HANDLE hDevice = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                 nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE hDevice = CreateFileA(path,
+                                 0,  // Только метаданные
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                 OPEN_EXISTING, 0, nullptr);
 
     if (hDevice == INVALID_HANDLE_VALUE) {
-        return 0;
+        return 0;  // Диск не существует или нет доступа
     }
 
     DISK_GEOMETRY_EX geometry = {};
     DWORD bytesReturned = 0;
 
-    bool success =
+    BOOL success =
         DeviceIoControl(hDevice, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, nullptr, 0,
                         &geometry, sizeof(geometry), &bytesReturned, nullptr);
 
-    ULONGLONG size = success ? geometry.DiskSize.QuadPart : 0;
+    uint64_t size = success ? geometry.DiskSize.QuadPart : 0;
+
     CloseHandle(hDevice);
     return size;
+}
+
+// Возвращает -1, если не удалось определить
+int GetPhysicalDiskIndexForDriveLetter(char letter) {
+    HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres)) return -1;
+
+    hres = CoInitializeSecurity(
+        nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return -1;
+    }
+
+    IWbemLocator* pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID*)&pLoc);
+    if (FAILED(hres)) {
+        CoUninitialize();
+        return -1;
+    }
+
+    IWbemServices* pSvc = nullptr;
+    hres = pLoc->ConnectServer(const_cast<LPWSTR>(L"ROOT\\CIMV2"), nullptr,
+                               nullptr, 0, 0, nullptr, nullptr, &pSvc);
+    if (FAILED(hres)) {
+        pLoc->Release();
+        CoUninitialize();
+        return -1;
+    }
+
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+                             RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+    if (FAILED(hres)) {
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return -1;
+    }
+
+    wchar_t query[512];
+    swprintf_s(query,
+               L"ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='%c:'} WHERE "
+               L"ResultClass=Win32_DiskPartition",
+               letter);
+
+    IEnumWbemClassObject* pEnum = nullptr;
+    hres = pSvc->ExecQuery(
+        const_cast<LPWSTR>(L"WQL"), query,
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &pEnum);
+
+    int diskIndex = -1;
+    if (SUCCEEDED(hres) && pEnum) {
+        IWbemClassObject* pPart = nullptr;
+        ULONG uReturn = 0;
+        if (pEnum->Next(WBEM_INFINITE, 1, &pPart, &uReturn) == S_OK &&
+            uReturn) {
+            VARIANT vIndex;
+            VariantInit(&vIndex);
+            if (SUCCEEDED(pPart->Get(L"DiskIndex", 0, &vIndex, 0, 0)) &&
+                (vIndex.vt == VT_I4 || vIndex.vt == VT_UI4)) {
+                diskIndex = vIndex.iVal;
+            }
+            VariantClear(&vIndex);
+            pPart->Release();
+        }
+        pEnum->Release();
+    }
+
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
+    return diskIndex;
+}
+
+ULONGLONG GetUsedSpaceOnPhysicalDisk(int targetDiskIndex) {
+    ULONGLONG totalUsed = 0;
+    DWORD drives = GetLogicalDrives();
+
+    for (char letter = 'A'; letter <= 'Z'; ++letter) {
+        if (!(drives & (1U << (letter - 'A')))) continue;
+
+        std::string root(1, letter);
+        root += ":\\";
+        if (GetDriveTypeA(root.c_str()) != DRIVE_FIXED) continue;
+
+        int diskIndex = GetPhysicalDiskIndexForDriveLetter(letter);
+        if (diskIndex != targetDiskIndex) continue;
+
+        ULARGE_INTEGER freeBytes = {}, totalBytes = {};
+        if (GetDiskFreeSpaceExA(root.c_str(), &freeBytes, &totalBytes,
+                                nullptr)) {
+            if (totalBytes.QuadPart >= freeBytes.QuadPart) {
+                totalUsed += (totalBytes.QuadPart - freeBytes.QuadPart);
+            }
+        }
+    }
+    return totalUsed;
 }
 
 bool IsHDD(int diskIndex) {
@@ -304,25 +306,17 @@ bool IsHDD(int diskIndex) {
 Disk FillDiskInfo(int diskIndex) {
     Disk disk = {};
     disk.total = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
-                          (1024.0 * 1024.0) * 100.0) / 100.0;
+                       (1024.0 * 1024.0) * 100.0) /
+                 100.0;
     disk.is_hdd = IsHDD(diskIndex);
 
-    // Свободное место — твоя логика (оставляем как есть)
-    ULONGLONG totalFree = 0;
-    // ... (вся твоя существующая логика получения totalFree) ...
-
-    disk.free = round(static_cast<double>(totalFree) / (1024.0 * 1024.0) * 100.0) / 100.0;
-
-    // Занятое — через новую функцию (или вычислить как total - free)
-    // Вариант 1: напрямую
-    disk.usage = GetPhysicalDiskUsedSpaceMB(diskIndex);
-
-    // Вариант 2 (проще и быстрее): вычислить
-    // disk.used_mb = std::max(0.0, disk.total_mb - disk.free_mb);
-
+    disk.usage = round(GetUsedSpaceOnPhysicalDisk(diskIndex) /
+                       (1024.0 * 1024.0) * 100.0) /
+                 100.0;
     return disk;
 }
 
+// возвращает название ОС
 string GetOsVersionName() {
     HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
     if (hNtdll) {
@@ -369,7 +363,7 @@ string GetOsVersionName() {
     return "Windows (unknown)";
 }
 
-string get_computer_domain_or_workgroup() {
+string GetComputerDomainOrWorkgroup() {
     PWSTR domainName = nullptr;
     NETSETUP_JOIN_STATUS joinStatus;
 
@@ -398,8 +392,8 @@ string get_computer_domain_or_workgroup() {
 }
 
 // Глобальные или статические переменные для хранения состояния
-static ULONGLONG s_lastIdleTime = 0;
-static ULONGLONG s_lastTotalTime = 0;
+uint64_t s_lastIdleTime = 0;
+uint64_t s_lastTotalTime = 0;
 
 double GetCPUUsage() {
     FILETIME idleTime, kernelTime, userTime;
@@ -409,15 +403,14 @@ double GetCPUUsage() {
 
     // Объединяем FILETIME в 64-битные значения (в 100-нс интервалах)
     ULARGE_INTEGER idle, kernel, user;
-    idle.QuadPart = (static_cast<ULONGLONG>(idleTime.dwHighDateTime) << 32) |
+    idle.QuadPart = (static_cast<uint64_t>(idleTime.dwHighDateTime) << 32) |
                     idleTime.dwLowDateTime;
-    kernel.QuadPart =
-        (static_cast<ULONGLONG>(kernelTime.dwHighDateTime) << 32) |
-        kernelTime.dwLowDateTime;
-    user.QuadPart = (static_cast<ULONGLONG>(userTime.dwHighDateTime) << 32) |
+    kernel.QuadPart = (static_cast<uint64_t>(kernelTime.dwHighDateTime) << 32) |
+                      kernelTime.dwLowDateTime;
+    user.QuadPart = (static_cast<uint64_t>(userTime.dwHighDateTime) << 32) |
                     userTime.dwLowDateTime;
 
-    ULONGLONG total = kernel.QuadPart + user.QuadPart;  // kernel включает idle
+    uint64_t total = kernel.QuadPart + user.QuadPart;  // kernel включает idle
 
     // Пропускаем первый вызов (нет предыдущих данных)
     static bool firstCall = true;
@@ -429,8 +422,8 @@ double GetCPUUsage() {
     }
 
     // Считаем дельты
-    ULONGLONG idleDelta = idle.QuadPart - s_lastIdleTime;
-    ULONGLONG totalDelta = total - s_lastTotalTime;
+    uint64_t idleDelta = idle.QuadPart - s_lastIdleTime;
+    uint64_t totalDelta = total - s_lastTotalTime;
 
     // Обновляем состояние
     s_lastIdleTime = idle.QuadPart;
@@ -490,7 +483,7 @@ vector<string> getMacAddresses() {
     return macList;
 }
 
-string bstrToUtf8(BSTR bstr) {
+string BstrToUtf8(BSTR bstr) {
     if (!bstr) return "";
     int len =
         WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
@@ -501,7 +494,7 @@ string bstrToUtf8(BSTR bstr) {
     return result;
 }
 
-string getBiosInfo() {
+string GetBiosInfo() {
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if (FAILED(hres)) return "EMPTY";
 
@@ -558,8 +551,8 @@ string getBiosInfo() {
             pObj->Get(L"Manufacturer", 0, &vMan, 0, 0);
             pObj->Get(L"SMBIOSBIOSVersion", 0, &vVer, 0, 0);
             if (vMan.vt == VT_BSTR && vVer.vt == VT_BSTR) {
-                string man = bstrToUtf8(vMan.bstrVal);
-                string ver = bstrToUtf8(vVer.bstrVal);
+                string man = BstrToUtf8(vMan.bstrVal);
+                string ver = BstrToUtf8(vVer.bstrVal);
                 if (!man.empty() || !ver.empty()) {
                     result = man + " - " + ver;
                 }
@@ -577,7 +570,7 @@ string getBiosInfo() {
     return result;
 }
 
-string getCpuBrand() {
+string GetCpuBrand() {
     int cpuInfo[4] = {0};
     char brand[49] = {0};  // 3 chunks по 16 байт = 48 + '\0'
 
@@ -597,7 +590,7 @@ string getCpuBrand() {
     return string(brand);
 }
 
-vector<string> getVideoAdapters() {
+vector<string> GetVideoAdapters() {
     vector<string> adapters;
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if (FAILED(hres)) return adapters;
@@ -619,8 +612,8 @@ vector<string> getVideoAdapters() {
     }
 
     IWbemServices* pSvc = nullptr;
-    hres = pLoc->ConnectServer((BSTR)L"ROOT\\CIMV2", nullptr, nullptr, 0, 0,
-                               nullptr, nullptr, &pSvc);
+    hres = pLoc->ConnectServer(const_cast<LPWSTR>(L"ROOT\\CIMV2"), nullptr,
+                               nullptr, 0, 0, nullptr, nullptr, &pSvc);
     if (FAILED(hres)) {
         pLoc->Release();
         CoUninitialize();
@@ -637,9 +630,11 @@ vector<string> getVideoAdapters() {
         return adapters;
     }
 
+    // === ИСПРАВЛЕНО: query объявлен ===
+    const wchar_t* queryStr = L"SELECT Name FROM Win32_VideoController";
     IEnumWbemClassObject* pEnum = nullptr;
     hres = pSvc->ExecQuery(
-        (BSTR)L"WQL", (BSTR)L"SELECT Name FROM Win32_VideoController",
+        const_cast<LPWSTR>(L"WQL"), const_cast<LPWSTR>(queryStr),
         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &pEnum);
 
     if (SUCCEEDED(hres) && pEnum) {
@@ -651,7 +646,7 @@ vector<string> getVideoAdapters() {
             VariantInit(&vName);
             if (SUCCEEDED(pObj->Get(L"Name", 0, &vName, 0, 0)) &&
                 vName.vt == VT_BSTR) {
-                adapters.push_back(bstrToUtf8(vName.bstrVal));
+                adapters.push_back(BstrToUtf8(vName.bstrVal));
             }
             VariantClear(&vName);
             pObj->Release();
@@ -666,7 +661,7 @@ vector<string> getVideoAdapters() {
 }
 
 // Возвращает средний пинг в миллисекундах (0 при ошибке)
-DWORD getAveragePing(const char* host, int attempts) {
+DWORD GetAveragePing(const char* host, int attempts) {
     if (!host || attempts <= 0) return 0;
 
     // Инициализация Winsock (требуется для inet_addr / getaddrinfo)

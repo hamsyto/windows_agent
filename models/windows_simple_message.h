@@ -7,11 +7,9 @@
 #include <vector>
 
 struct Disk {
-    // usage и total
-    double usage;   // Megabytes
-    double free;  // Megabytes
     double total;  // Megabytes
-    bool is_hdd;      // Optional
+    double usage;  // Megabytes
+    bool is_hdd;   // Optional
 };
 
 struct USB {
@@ -21,8 +19,8 @@ struct USB {
 
 // объём оперативной памяти
 struct RAM {
-    double usage;   // Megabytes
     double total;  // Megabytes
+    double usage;  // Megabytes
 };
 
 struct CPU {

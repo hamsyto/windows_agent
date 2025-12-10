@@ -15,6 +15,7 @@
 #include <winioctl.h>
 
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <unordered_set>
@@ -27,23 +28,10 @@ using namespace std;
 
 vector<Disk> GetDisks() {
     vector<Disk> disks;
-    for (int i = 0;; ++i) {
-        char path[64];
-        snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", i);
-
-        HANDLE hDevice =
-            CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                        OPEN_EXISTING, 0, nullptr);
-
-        if (hDevice == INVALID_HANDLE_VALUE) {
-            if (GetLastError() == ERROR_FILE_NOT_FOUND) {
-                break;  // больше физических дисков нет
-            }
-            continue;  // пропустить недоступные
-        }
-        CloseHandle(hDevice);
-
-        disks.push_back(FillDiskInfo(i));
+    for (int diskIndex = 0; diskIndex < 16; ++diskIndex) {
+        uint64_t size = GetPhysicalDiskSize(diskIndex);
+        if (size == 0) continue;  // диск отсутствует или недоступен
+        disks.push_back(FillDiskInfo(diskIndex));
     }
     return disks;
 }
@@ -60,8 +48,9 @@ RAM GetRam() {
     // установка версии структуры для обратной совместимости
     mem_byte.dwLength = sizeof(mem_byte);
     if (GlobalMemoryStatusEx(&mem_byte)) {
-        mem_MB.usage = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
-        mem_MB.usage = round(mem_MB.usage * 100.0) / 100.0;
+        double free = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
+        free = round(mem_MB.usage * 100.0) / 100.0;
+        mem_MB.usage = mem_MB.total - free;
     }
 
     return mem_MB;
@@ -108,7 +97,7 @@ OS GetOs() {
     OS osys = {};
 
     osys.hostname = get_dns_fqdn_hostname();
-    osys.domain = get_computer_domain_or_workgroup();
+    osys.domain = GetComputerDomainOrWorkgroup();
     osys.version = GetOsVersionName();
 
     FILETIME time;
@@ -131,10 +120,10 @@ OS GetOs() {
 Hardware GetHardware() {
     Hardware hardware = {};
 
-    hardware.bios = getBiosInfo();
-    hardware.cpu = getCpuBrand();
+    hardware.bios = GetBiosInfo();
+    hardware.cpu = GetCpuBrand();
     hardware.mac = getMacAddresses();
-    hardware.video = getVideoAdapters();
+    hardware.video = GetVideoAdapters();
 
     return hardware;
 }
@@ -147,8 +136,8 @@ Ping GetPing() {
         return ping_m;
     }
 
-    DWORD avg = getAveragePing(setting.ip_server.c_str(), 4);
-    // DWORD avg = getAveragePing("google.com", 3); // чист для проверки
+    DWORD avg = GetAveragePing(setting.ip_server.c_str(), 4);
+    // DWORD avg = GetAveragePing("google.com", 3); // чист для проверки
 
     if (avg > 0) {
         ping_m.ping_millisec = avg;
