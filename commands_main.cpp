@@ -39,6 +39,7 @@ int SendMessages() {
     while (true) {
         if (connect_socket.agent_id == 0) {
             connect_socket.agent_id = Registration(connect_socket, settings);
+            if (connect_socket.agent_id == 0) continue;
             cout << "ID: " << connect_socket.agent_id << " saved\n";
         } else {
             SendData(connect_socket, settings);
@@ -50,21 +51,25 @@ int SendMessages() {
 // TODO: Создать файл и записать (переделать возврат функции на INT (agent_id))
 int32_t Registration(Connection& connect_socket, Settings& settings) {
     SendData(connect_socket, settings);
+    if (!connect_socket.connected) return 0;
 
     uint32_t id = RecvMessage(connect_socket);
-    if (connect_socket.connected == false) return 1;
+    if (connect_socket.connected == false) return 0;
 
     try {
-        if (connect_socket.SaveAgentID(id)) return id;
+        if (connect_socket.SaveAgentID(id)) {
+            return id;
+        }
     } catch (const exception& e) {
         string error = e.what();
         SendTypeMsgError(connect_socket, error);
     }
-    return 1;
+    return 0;
 }
 
 void SendData(Connection& connect_socket, Settings& settings) {
     connect_socket.Connect(settings);
+    if (!connect_socket.connected) return;
 
     Message msg = {};
     msg.header.agent_id = connect_socket.agent_id;

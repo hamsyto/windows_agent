@@ -28,31 +28,49 @@ using namespace std;
 
 vector<Disk> GetDisks() {
     vector<Disk> disks;
+
     for (int diskIndex = 0; diskIndex < 16; ++diskIndex) {
         uint64_t size = GetPhysicalDiskSize(diskIndex);
         if (size == 0) continue;  // диск отсутствует или недоступен
-        disks.push_back(FillDiskInfo(diskIndex));
+
+        // теперь по томам ходим
+
+        // получаем битовую маску логических дисков
+        DWORD drives = GetLogicalDrives();
+        string root;
+
+        for (char letter = 'A'; letter <= 'Z'; ++letter) {
+            if (!(drives & (1U << (letter - 'A')))) continue;
+
+            root = string(1, letter) + ":\\";
+            if (GetDriveTypeA(root.c_str()) != DRIVE_FIXED) continue;
+
+            int diskIndex = GetPhysicalDiskIndexForDriveLetter(letter);
+
+            auto info = FillDiskInfo(diskIndex, root);
+            disks.push_back(info);
+        }
     }
     return disks;
 }
 
 RAM GetRam() {
     RAM mem_MB = {};
-
-    ULONGLONG mem_KB = 0;
-    if (GetPhysicallyInstalledSystemMemory(&mem_KB)) {
-        mem_MB.total = mem_KB / 1024.0;
-        mem_MB.total = round(mem_MB.total * 100.0) / 100.0;
+    MEMORYSTATUSEX m{};
+    m.dwLength = sizeof(m);
+    ULONGLONG installedKB = 0;
+    if (GetPhysicallyInstalledSystemMemory(&installedKB)) {
+        mem_MB.total = installedKB * 1024;
     }
-    MEMORYSTATUSEX mem_byte = {};
-    // установка версии структуры для обратной совместимости
-    mem_byte.dwLength = sizeof(mem_byte);
-    if (GlobalMemoryStatusEx(&mem_byte)) {
-        double free = mem_byte.ullAvailPhys / (1024.0 * 1024.0);
-        free = round(mem_MB.usage * 100.0) / 100.0;
-        mem_MB.usage = mem_MB.total - free;
-    }
+    if (GlobalMemoryStatusEx(&m)) {
+        if (mem_MB.total == 0) {
+            mem_MB.total = m.ullTotalPhys;
+        }
+        mem_MB.used = mem_MB.total - m.ullAvailPhys;
 
+        mem_MB.total = round(mem_MB.total / (1024 * 1024) * 100.0) / 100.0;
+        mem_MB.used = round(mem_MB.used / (1024 * 1024) * 100.0) / 100.0;
+    }
     return mem_MB;
 }
 
@@ -68,8 +86,8 @@ CPU GetCpu() {
     double usage1 = GetCPUUsage();
     // Ждём немного (например, 1000 мс - 1 сек), чтобы получить точную загрузку
     Sleep(1000);
-    cpu.usage = GetCPUUsage();
-    cpu.usage = round(cpu.usage * 100.0) / 100.0;
+    cpu.used = GetCPUUsage();
+    cpu.used = round(cpu.used * 100.0) / 100.0;
     return cpu;
 }
 

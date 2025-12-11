@@ -111,15 +111,42 @@ bool LoadEnvSettings(Settings& out) {
     return true;
 }
 
-// Вспомогательная функция — нормализация имени тома
-string NormalizeVolumeName(const char* volumeName) {
-    string vol(volumeName);
-    if (!vol.empty() && vol.back() == '\\') {
-        vol.pop_back();
+double GetTotalDisk(const std::string& root) {
+    ULARGE_INTEGER freeBytes = {};
+    ULARGE_INTEGER totalBytes = {};
+
+    if (!GetDiskFreeSpaceExA(root.c_str(), &freeBytes, &totalBytes, nullptr)) {
+        return 0;  // ошибка — вернуть 0 или можно бросить исключение
     }
-    return vol;
+
+    if (totalBytes.QuadPart < freeBytes.QuadPart)
+        return 0;  // некорректные данные
+
+    return round(
+               (static_cast<double>(totalBytes.QuadPart) / (1024.0 * 1024.0)) *
+               100.0) /
+           100.0;
 }
 
+double GetUsedDisk(const std::string& root) {
+    ULARGE_INTEGER freeBytes = {};
+    ULARGE_INTEGER totalBytes = {};
+
+    if (!GetDiskFreeSpaceExA(root.c_str(), &freeBytes, &totalBytes, nullptr)) {
+        return 0;  // ошибка — вернуть 0 или можно бросить исключение
+    }
+
+    if (totalBytes.QuadPart < freeBytes.QuadPart)
+        return 0;  // некорректные данные
+
+    return round(
+               (static_cast<double>(totalBytes.QuadPart - freeBytes.QuadPart) /
+                (1024.0 * 1024.0)) *
+               100.0) /
+           100.0;
+}
+
+// не надо щас будет
 uint64_t GetPhysicalDiskSize(int diskIndex) {
     char path[64];
     snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
@@ -221,14 +248,14 @@ int GetPhysicalDiskIndexForDriveLetter(char letter) {
     return diskIndex;
 }
 
-ULONGLONG GetUsedSpaceOnPhysicalDisk(int targetDiskIndex) {
-    ULONGLONG totalUsed = 0;
+string GetMountGetUsedSpace(int targetDiskIndex, double& used) {
+    used = 0;
     DWORD drives = GetLogicalDrives();
 
     for (char letter = 'A'; letter <= 'Z'; ++letter) {
         if (!(drives & (1U << (letter - 'A')))) continue;
 
-        std::string root(1, letter);
+        string root(1, letter);
         root += ":\\";
         if (GetDriveTypeA(root.c_str()) != DRIVE_FIXED) continue;
 
@@ -239,21 +266,21 @@ ULONGLONG GetUsedSpaceOnPhysicalDisk(int targetDiskIndex) {
         if (GetDiskFreeSpaceExA(root.c_str(), &freeBytes, &totalBytes,
                                 nullptr)) {
             if (totalBytes.QuadPart >= freeBytes.QuadPart) {
-                totalUsed += (totalBytes.QuadPart - freeBytes.QuadPart);
+                used = (totalBytes.QuadPart - freeBytes.QuadPart);
             }
         }
     }
-    return totalUsed;
+    return "root";
 }
 
-bool IsHDD(int diskIndex) {
-    char path[64];
+string GetBusType(int diskIndex) {
+    char path[64] = {};
     snprintf(path, sizeof(path), "\\\\.\\PhysicalDrive%d", diskIndex);
 
     HANDLE hDevice = CreateFileA(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                  nullptr, OPEN_EXISTING, 0, nullptr);
     if (hDevice == INVALID_HANDLE_VALUE) {
-        return false;
+        return "ERROR";
     }
 
     STORAGE_PROPERTY_QUERY query = {};
@@ -261,16 +288,38 @@ bool IsHDD(int diskIndex) {
     query.QueryType = PropertyStandardQuery;
 
     DWORD size = 0;
+    /*
+    bool success =
+        DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
+                        sizeof(query), nullptr, 0, &size, nullptr);
+                        */
     if (!DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
                          sizeof(query), nullptr, 0, &size, nullptr) &&
         GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
         CloseHandle(hDevice);
-        return false;
+        return "ERROR";
     }
+    /*
+        if (!success && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            // Попробуем проверить через IOCTL_STORAGE_GET_DEVICE_NUMBER
+            STORAGE_DEVICE_NUMBER devNumber = {};
+            DWORD bytesReturned = 0;
+            if (DeviceIoControl(hDevice, IOCTL_STORAGE_GET_DEVICE_NUMBER,
+       nullptr, 0, &devNumber, sizeof(devNumber), &bytesReturned, nullptr)) {
+                // Диск существует, но свойства недоступны
+                CloseHandle(hDevice);
+                return "UNKNOWN";
+            } else {
+                // Даже базовый IOCTL не работает — возможно, не настоящий диск
+                CloseHandle(hDevice);
+                return "ERROR";
+            }
+        }
+            */
 
     if (size == 0) {
         CloseHandle(hDevice);
-        return false;
+        return "UNKNOWN";
     }
 
     auto buffer = make_unique<BYTE[]>(size);
@@ -279,40 +328,43 @@ bool IsHDD(int diskIndex) {
     if (!DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
                          sizeof(query), desc, size, &size, nullptr)) {
         CloseHandle(hDevice);
-        return false;
+        return "ERROR";
     }
 
     CloseHandle(hDevice);
 
-    // Определяем по BusType
+    // Проверяем, что структура содержит поле BusType
+    if (desc->Size < FIELD_OFFSET(STORAGE_DEVICE_DESCRIPTOR, BusType) +
+                         sizeof(desc->BusType)) {
+        return "UNKNOWN";
+    }
+
     switch (desc->BusType) {
         case BusTypeAtapi:
+            return "ATAPI";
         case BusTypeAta:
-            // ATA/ATAPI — может быть и HDD, и SSD. Без RotationRate —
-            // предполагаем HDD.
-            return true;
+            return "ATA";
         case BusTypeUsb:
+            return "USB";
         case BusTypeNvme:
+            return "NVME";
         case BusTypeSas:
+            return "SAS";
         case BusTypeSata:
+            return "SATA";
         default:
-            // NVMe, USB, SAS — почти всегда SSD или внешние
-            // SATA — в современных системах чаще SSD, но если хотите точнее —
-            // без RotationRate не получится
-            return false;
+            return "UNKNOWN";
     }
 }
 
-Disk FillDiskInfo(int diskIndex) {
+Disk FillDiskInfo(int& diskIndex, string& root) {
     Disk disk = {};
-    disk.total = round(static_cast<double>(GetPhysicalDiskSize(diskIndex)) /
-                       (1024.0 * 1024.0) * 100.0) /
-                 100.0;
-    disk.is_hdd = IsHDD(diskIndex);
 
-    disk.usage = round(GetUsedSpaceOnPhysicalDisk(diskIndex) /
-                       (1024.0 * 1024.0) * 100.0) /
-                 100.0;
+    disk.number = diskIndex;
+    disk.mount = root;
+    disk.type = GetBusType(diskIndex);
+    disk.total = GetTotalDisk(root);
+    disk.used = GetUsedDisk(root);
     return disk;
 }
 
@@ -433,14 +485,14 @@ double GetCPUUsage() {
     if (totalDelta == 0) return 0.0;
 
     // Загрузка = 1 - (idle / total)
-    double usage =
+    double used =
         1.0 - static_cast<double>(idleDelta) / static_cast<double>(totalDelta);
 
     // Ограничиваем диапазон [0.0, 1.0]
-    if (usage < 0.0) usage = 0.0;
-    if (usage > 1.0) usage = 1.0;
+    if (used < 0.0) used = 0.0;
+    if (used > 1.0) used = 1.0;
 
-    return usage;  // или (usage1 + usage2) / 2 для сглаживания
+    return used;  // или (usage1 + usage2) / 2 для сглаживания
 }
 
 vector<string> getMacAddresses() {

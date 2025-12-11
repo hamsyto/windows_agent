@@ -7,9 +7,11 @@
 #include <vector>
 
 struct Disk {
-    double total;  // Megabytes
-    double usage;  // Megabytes
-    bool is_hdd;   // Optional
+    uint8_t number;  // номер физического диска
+    std::string mount;
+    std::string type;  // Тип шины
+    double total;      // Megabytes
+    double used;       // Megabytes
 };
 
 struct USB {
@@ -19,13 +21,13 @@ struct USB {
 
 // объём оперативной памяти
 struct RAM {
-    double total;  // Megabytes
-    double usage;  // Megabytes
+    double total = 0;  // Megabytes
+    double used = 0;   // Megabytes
 };
 
 struct CPU {
-    int cores;     // Потоки
-    double usage;  // Использование 0 - 1
+    int cores;    // Потоки
+    double used;  // Использование 0 - 1
 };
 
 struct OS {

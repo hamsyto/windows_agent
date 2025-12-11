@@ -52,10 +52,8 @@ string Message::toJson() const {
     }
 
     j["payload"] = {
-        {"ram",
-         {{"total", payload.ram.total},
-          {"usage", payload.ram.usage}}},
-        {"cpu", {{"cores", payload.cpu.cores}, {"usage", payload.cpu.usage}}},
+        {"ram", {{"total", payload.ram.total}, {"used", payload.ram.used}}},
+        {"cpu", {{"cores", payload.cpu.cores}, {"used", payload.cpu.used}}},
         {"system",
          {{"hostname", payload.system.hostname},
           {"domain", payload.system.domain},
@@ -70,9 +68,11 @@ string Message::toJson() const {
         {"ping", payload.ping_m.ping_millisec}};
 
     for (const auto& disk : payload.disks) {
-        j["payload"]["disks"].push_back({{"total", disk.total},
-                                         {"usage", disk.usage},
-                                         {"is_hdd", disk.is_hdd}});
+        j["payload"]["disks"].push_back({{"number", disk.number},
+                                         {"mount", disk.mount},
+                                         {"total", disk.total},
+                                         {"used", disk.used},
+                                         {"type", disk.type}});
     }
 
     for (const auto& mac : payload.hardware.mac) {

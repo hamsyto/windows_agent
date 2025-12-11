@@ -32,7 +32,7 @@ void Connection::Connect(Settings& settings) {
     socket = InitConnectSocket();
     if (socket == INVALID_SOCKET) {
         cout << "connect_socket don't init" << endl;
-        return;
+        connected = false;
     }
     if (ConnectServer(socket, settings) > 0) connected = true;
 

@@ -15,20 +15,18 @@
 std::unordered_map<std::string, std::string> ClearEnvFile();
 // Вспомогательная функция: обрезать пробелы по краям
 std::string Trim(const std::string& str);
-// Вспомогательная функция — нормализация имени тома
-std::string NormalizeVolumeName(const char* volumeName);
 // Вспомогательная: получить общий размер физического диска
 uint64_t GetPhysicalDiskSize(int diskIndex);
 
 int GetPhysicalDiskIndexForDriveLetter(char letter);
 
-uint64_t GetUsedSpaceOnPhysicalDisk(int targetDiskIndex);
+std::string GetMountGetUsedSpace(int targetDiskIndex, uint32_t& used);
 
-Disk FillDiskInfo(int diskIndex);
+Disk FillDiskInfo(int& diskIndex, std::string& root);
 // читает .env и заполняет Settings
 bool LoadEnvSettings(Settings& out);
 // Вспомогательная: определить тип диска (HDD/SSD)
-bool IsHDD(int diskIndex);
+std::string GetBusType(int diskIndex);
 
 std::string GetOsVersionName();
 std::string GetComputerDomainOrWorkgroup();

@@ -31,6 +31,7 @@
             "command": "g++",
             "args": [
                 //статическая линковка стандартной библиотеки
+                "-static",
                 "-static-libgcc",
                 "-static-libstdc++",
                 //
