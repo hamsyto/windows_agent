@@ -12,29 +12,29 @@
 #include "windows_simple_message.h"
 
 class Connection {
-   public:
-    bool connected;
-    SOCKET socket;
-    uint32_t agent_id;
+ public:
+  bool connected;
+  SOCKET socket;
+  uint32_t agent_id;
 
-    // Конструктор получает Settings по константной ссылке
-    Connection();
+  // Конструктор получает Settings по константной ссылке
+  Connection();
 
-    // Методы
-    void Connect(Settings& settings);
+  // Методы
+  void Connect(Settings& settings);
 
-    void Disconnect();
+  void Disconnect();
 
-    bool SaveAgentID(uint32_t& id);
-    /*
-        // Отправка бинарных данных
-        bool Send(const void* data, size_t size);
+  bool SaveAgentID(uint32_t& id);
+  /*
+      // Отправка бинарных данных
+      bool Send(const void* data, size_t size);
 
-        // Получение бинарных данных (ожидаем ровно size байт)
-        bool Receive(void* buffer, size_t size);
-    */
-    SOCKET GetSocket() const;
-    unsigned int GetAgentID() const;
+      // Получение бинарных данных (ожидаем ровно size байт)
+      bool Receive(void* buffer, size_t size);
+  */
+  SOCKET GetSocket() const;
+  unsigned int GetAgentID() const;
 };
 
 #endif
