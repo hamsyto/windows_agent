@@ -1,4 +1,4 @@
-// collectorr.cpp
+// collector.cpp
 
 // CPU (комплекснмя, где-то вероятно придётся использтвать sleep(wait))
 // RAM
@@ -21,7 +21,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "collectorr.h"
+#include "collector.h"
 #include "commands_coll.h"
 
 using namespace std;

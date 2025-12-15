@@ -1,4 +1,4 @@
-// collectorr.h
+// collector.h
 
 // CPU (комплекснмя, где-то вероятно придётся использтвать sleep(wait))
 // RAM
@@ -6,12 +6,12 @@
 // HDD+SSD (free + total)
 // Здесь по 1 функции на каждую модель данных, каждая собирает своё и возвращает
 // свой тип данных
-#ifndef COLLECTORR_H
-#define COLLECTORR_H
+#ifndef collector_H
+#define collector_H
 
 #include <vector>
 
-#include "../models/windows_simple_message.h"
+#include "../models/message.h"
 
 std::vector<Disk> GetDisks();
 RAM GetRam();

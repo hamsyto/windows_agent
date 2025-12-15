@@ -1,7 +1,7 @@
 --- компиляция как одна строка---
 g++ -fdiagnostics-color=always -g 
     main.cpp 
-    collector\collectorr.cpp 
+    collector\collector.cpp 
     collector\commands_coll.cpp  
 -o compiled\main.exe -lws2_32 -lnetapi32
 

@@ -16,7 +16,7 @@
 
 #include <string>
 
-#include "../collector/collectorr.h"
+#include "../models/message.h"
 
 // сборка всех даыннх в одно сообщение
 Message GetMess(Message& msg);

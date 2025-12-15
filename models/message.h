@@ -1,5 +1,5 @@
-#ifndef WINDOWS_SIMPLE_MESSAGE_H
-#define WINDOWS_SIMPLE_MESSAGE_H
+#ifndef message_H
+#define message_H
 
 #include <windows.h>
 

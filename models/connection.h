@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-#include "windows_simple_message.h"
+#include "message.h"
 #include "settings.h"
 
 class Connection {
