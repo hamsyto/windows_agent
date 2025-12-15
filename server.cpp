@@ -22,7 +22,7 @@ using namespace std;
 
 array<char, 4> int32_to_network_bytes(int32_t value);
 
-// Конфигурация (можно вынести в const.h)
+// Конфигурация (можно вынести в consts.h)
 constexpr const char* kIpAddr = "127.0.0.1";
 constexpr int kPort = 8101;
 constexpr int kQueue = 3;

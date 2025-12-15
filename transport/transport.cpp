@@ -9,14 +9,14 @@
 #include <windows.h>
 // специализированные заголовки Windows
 #include <VersionHelpers.h>
+#include <consts.h>
 #include <winioctl.h>
 
 #include <cstdint>
 #include <iostream>
+#include <libs/json/json.hpp>
 #include <string>
 
-#include "../const.h"
-#include "nlohmann/json.hpp"
 #include "transport.h"
 
 using json = nlohmann::json;

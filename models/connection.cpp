@@ -2,15 +2,16 @@
 
 #include <winsock2.h>
 // порядок подключения
+#include <commands_main.h>
+#include <consts.h>
+#include <transport/transport.h>
 #include <windows.h>
 
 #include <cstdint>
 #include <iostream>
 
-#include "../commands_main.h"
-#include "../const.h"
-#include "../transport/transport.h"
 #include "connection.h"
+#include "settings.h"
 #include "windows_simple_message.h"
 
 using namespace std;

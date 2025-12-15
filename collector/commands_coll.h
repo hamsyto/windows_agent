@@ -4,12 +4,12 @@
 #define COLLECTORR_COLL_H
 
 #include <Wbemidl.h>  // содержит объявление BSTR, IWbemLocator и т.д.
+#include <models/settings.h>
+#include <models/windows_simple_message.h>
 
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "../models/windows_simple_message.h"
 
 // УниверсФунк читает и чистит .env от комментариев и символов
 std::unordered_map<std::string, std::string> ClearEnvFile();

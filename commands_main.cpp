@@ -19,7 +19,7 @@
 
 #include "collector/commands_coll.h"
 #include "commands_main.h"
-#include "const.h"
+#include "consts.h"
 #include "models/connection.h"
 #include "transport/transport.h"
 

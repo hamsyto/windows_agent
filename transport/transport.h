@@ -12,11 +12,10 @@
 #include <windows.h>
 // специализированные заголовки Windows
 #include <VersionHelpers.h>
+#include <collector/collectorr.h>
 #include <winioctl.h>
 
 #include <string>
-
-#include "../collector/collectorr.h"
 
 // сборка всех даыннх в одно сообщение
 Message GetMess(Message& msg);

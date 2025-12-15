@@ -22,6 +22,7 @@
 // Windows API
 #include <VersionHelpers.h>
 #include <Wbemidl.h>
+#include <consts.h>
 #include <intrin.h>
 #include <winioctl.h>
 
@@ -36,7 +37,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../const.h"
 #include "commands_coll.h"
 
 // === предложение нейронки: линковка WMI ===

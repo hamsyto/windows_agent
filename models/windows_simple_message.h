@@ -76,10 +76,4 @@ struct Message {
   std::string toJson() const;
 };
 
-struct Settings {
-  int idle_time;          // как часто отправлять данные
-  std::string ip_server;  // ip или dns адрес сервера куда отправлять
-  int port_server;        // port сервера
-};
-
 #endif
