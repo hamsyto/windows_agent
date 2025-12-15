@@ -35,9 +35,11 @@
                 "-static-libgcc",
                 "-static-libstdc++",
                 // Библиотеки
+                "-Ilibs/lz4",
                 // Архивирование
                 "libs\\lz4\\lz4.c",
                 "libs\\lz4\\lz4hc.c",
+                //"-llz4",
                 // Шифрование
                 // "",
                 "-DWIN32_LEAN_AND_MEAN",

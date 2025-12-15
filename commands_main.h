@@ -10,15 +10,15 @@
 #include <cstdint>
 #include <string>
 
-#include "transport/transport.h"
 #include "models/connection.h"
+#include "transport/transport.h"
 
 int SendMessages();
 int32_t Registration(Connection& connect_socket, Settings& settings);
 void SendData(Connection& connect_socket, Settings& settings);
 // задаёт тип сообщениия error и отправляет json с текстом ошибки
-void SendTypeMsgError(Connection& connect_socket, std::string& error);
-
+void SendTypeMsgError(Connection& connect_socket, std::string& error,
+                      Settings& settings);
 // инициализирует winsock
 int WinsockInit();
 
