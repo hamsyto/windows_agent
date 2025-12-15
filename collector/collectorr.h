@@ -9,9 +9,9 @@
 #ifndef COLLECTORR_H
 #define COLLECTORR_H
 
-#include <models/windows_simple_message.h>
-
 #include <vector>
+
+#include "../models/windows_simple_message.h"
 
 std::vector<Disk> GetDisks();
 RAM GetRam();

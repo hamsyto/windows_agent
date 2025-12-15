@@ -2,10 +2,10 @@
 #ifndef AGENT_LZ4_HANDLER_H
 #define AGENT_LZ4_HANDLER_H
 
-#include <consts.h>
-
 #include <stdexcept>
 #include <vector>
+
+#include "../../consts.h"
 
 namespace agent::compression {
 

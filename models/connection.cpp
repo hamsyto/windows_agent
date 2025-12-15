@@ -2,14 +2,14 @@
 
 #include <winsock2.h>
 // порядок подключения
-#include <commands_main.h>
-#include <consts.h>
-#include <transport/transport.h>
 #include <windows.h>
 
 #include <cstdint>
 #include <iostream>
 
+#include "../commands_main.h"
+#include "../consts.h"
+#include "../transport/transport.h"
 #include "connection.h"
 #include "settings.h"
 #include "windows_simple_message.h"
@@ -18,45 +18,45 @@ using namespace std;
 
 // Конструктор получает Settings по константной ссылке
 Connection::Connection() {
-  socket = INVALID_SOCKET;
-  connected = false;
-  agent_id = 0;
+    socket = INVALID_SOCKET;
+    connected = false;
+    agent_id = 0;
 }
 
 // Методы
 void Connection::Connect(Settings& settings) {
-  if (socket != INVALID_SOCKET) {
-    Disconnect();
-    Sleep(settings.idle_time * 1000);
-  }
+    if (socket != INVALID_SOCKET) {
+        Disconnect();
+        Sleep(settings.idle_time * 1000);
+    }
 
-  socket = InitConnectSocket();
-  if (socket == INVALID_SOCKET) {
-    cout << "connect_socket don't init" << endl;
-    connected = false;
-  }
-  if (ConnectServer(socket, settings) > 0) connected = true;
+    socket = InitConnectSocket();
+    if (socket == INVALID_SOCKET) {
+        cout << "connect_socket don't init" << endl;
+        connected = false;
+    }
+    if (ConnectServer(socket, settings) > 0) connected = true;
 
-  if (!connected) {
-    CloseSocketCheck(socket);
-    socket = INVALID_SOCKET;
-  }
+    if (!connected) {
+        CloseSocketCheck(socket);
+        socket = INVALID_SOCKET;
+    }
 }
 
 void Connection::Disconnect() {
-  if (socket == INVALID_SOCKET) return;
-  CloseSocketCheck(socket);
-  connected = false;
-  cout << "disconnected from the server" << endl;
+    if (socket == INVALID_SOCKET) return;
+    CloseSocketCheck(socket);
+    connected = false;
+    cout << "disconnected from the server" << endl;
 }
 
 bool Connection::SaveAgentID(uint32_t& id) {
-  DeleteFileInCurrentDir(kFileName);
-  if (!WriteIntToFile(kFileName, id)) {
-    cout << "ID not saved\n";
-    return false;
-  }
-  return true;
+    DeleteFileInCurrentDir(kFileName);
+    if (!WriteIntToFile(kFileName, id)) {
+        cout << "ID not saved\n";
+        return false;
+    }
+    return true;
 }
 /*
 // Отправка бинарных данных
