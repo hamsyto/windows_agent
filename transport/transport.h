@@ -17,9 +17,13 @@
 #include <string>
 
 #include "../models/message.h"
+#include "../models/settings.h"
 
 // сборка всех даыннх в одно сообщение
 Message GetMess(Message& msg);
+std::string compress(const std::string& jsonStr, Settings& settigns);
+std::string encrypt(const std::string& jsonStr, Settings& settigns);
+
 // отправляет сначала длину потом само сообщение
 void SendMessageAndMessageSize(SOCKET& client_socket,
                                const std::string& jsonStr);

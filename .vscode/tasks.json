@@ -34,8 +34,12 @@
                 "-static",
                 "-static-libgcc",
                 "-static-libstdc++",
-                // "-static-openssl",
-                //
+                // Библиотеки
+                // Архивирование
+                "libs\\lz4\\lz4.c",
+                "libs\\lz4\\lz4hc.c",
+                // Шифрование
+                // "",
                 "-DWIN32_LEAN_AND_MEAN",
                 "-D_WIN32_WINNT=0x0A00",
                 "-DWINVER=0x0A00",
@@ -46,7 +50,7 @@
                 "commands_main.cpp",
                 // Transport
                 "transport\\transport.cpp",
-                //"transport\\compressor\\lz4_handler.cpp",
+                "transport\\compressor\\lz4_handler.cpp",
                 //"transport\\chiper\\chacha_handler.cpp",
                 // Models
                 "models\\connection.cpp",

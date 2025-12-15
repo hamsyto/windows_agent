@@ -14,6 +14,13 @@
 
 using namespace std;
 
+string compress(const std::string& jsonStr, Settings& settigns) {
+  return jsonStr;
+};
+string encrypt(const std::string& jsonStr, Settings& settigns) {
+  return jsonStr;
+};
+
 void SendMessageAndMessageSize(SOCKET& client_socket, const string& jsonStr) {
   if ((jsonStr.size()) > kMaxBuf) {
     cout << "Message length exceeds the allowed sending length. Message "
