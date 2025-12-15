@@ -1,12 +1,4 @@
 // collector.cpp
-
-// CPU (комплекснмя, где-то вероятно придётся использтвать sleep(wait))
-// RAM
-// OS (version, hostname, time+timezone)
-// HDD+SSD (free + total)
-// Здесь по 1 функции на каждую модель данных, каждая собирает своё и возвращает
-// свой тип данных
-
 #include <winsock2.h>
 // порядок подключения
 #include <windows.h>

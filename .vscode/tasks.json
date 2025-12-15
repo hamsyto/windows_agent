@@ -34,10 +34,8 @@
                 "-static",
                 "-static-libgcc",
                 "-static-libstdc++",
+                // "-static-openssl",
                 //
-                "-ID:\\path\\to\\vcpkg\\installed\\x64-windows\\include \\",
-                "-LD:\\path\\to\\vcpkg\\installed\\x64-windows\\lib \\",
-                "-lsodium",
                 "-DWIN32_LEAN_AND_MEAN",
                 "-D_WIN32_WINNT=0x0A00",
                 "-DWINVER=0x0A00",
@@ -46,12 +44,16 @@
                 "-g",
                 "main.cpp",
                 "commands_main.cpp",
+                // Transport
                 "transport\\transport.cpp",
-                "transport\\layers.cpp",
-                "transport\\compressor\\lz4_handler.cpp",
-                "transport\\compressor\\chacha_handler.cpp",
+                //"transport\\compressor\\lz4_handler.cpp",
+                //"transport\\chiper\\chacha_handler.cpp",
+                // Models
                 "models\\connection.cpp",
-                "collector\\collectorr.cpp",
+                "models\\message.cpp",
+                "models\\settings.cpp",
+                // Collector
+                "collector\\collector.cpp",
                 "collector\\commands_coll.cpp",
                 "-o",
                 "compiled\\main.exe",

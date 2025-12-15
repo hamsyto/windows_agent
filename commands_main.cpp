@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "commands_main.h"
 #include "consts.h"
 #include "models/connection.h"
 #include "transport/transport.h"

@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "../../consts.h"
+
 // Простая структура настроек
 struct CryptoSettings {
   std::string listener_key;  // Ключ в виде строки
