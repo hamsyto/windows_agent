@@ -1,13 +1,15 @@
 // chacha_handler.cpp
 #include "chacha_handler.h"
 
+#include <openssl/core_names.h>
 #include <openssl/evp.h>
+#include <openssl/params.h>
 #include <openssl/rand.h>
-#include <openssl/sha.h>
 
 #include <cstring>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 
 #include "../../consts.h"
 
@@ -19,24 +21,24 @@ ChaChaHandler::ChaChaHandler(const CryptoSettings& settings)
   key_ = prepare_key(settings_.listener_key);
 }
 
-std::array<uint8_t, kKeySize> ChaChaHandler::prepare_key(
+std::array<uint8_t, 32> ChaChaHandler::prepare_key(
     const std::string& listener_key) {
-  std::array<uint8_t, kKeySize> key;
+  std::array<uint8_t, 32> key{};
 
-  // Хэшируем ключ с помощью SHA-256 до 32 байт
-  SHA256_CTX sha256;
-  SHA256_Init(&sha256);
-  SHA256_Update(&sha256, listener_key.data(), listener_key.size());
-  SHA256_Final(key.data(), &sha256);
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr);
+  EVP_DigestUpdate(mdctx, listener_key.data(), listener_key.size());
+  EVP_DigestFinal_ex(mdctx, key.data(), nullptr);
+  EVP_MD_CTX_free(mdctx);
 
   return key;
 }
 
-std::array<uint8_t, kNonceSize> ChaChaHandler::generate_nonce() {
-  std::array<uint8_t, kNonceSize> nonce;
+std::array<uint8_t, 12> ChaChaHandler::generate_nonce() {
+  std::array<uint8_t, 12> nonce{};
 
-  // Генерируем криптографически безопасные случайные байты
-  if (RAND_bytes(nonce.data(), kNonceSize) != 1) {
+  // Просто используйте RAND_bytes - она работает в OpenSSL 3.x
+  if (RAND_bytes(nonce.data(), nonce.size()) != 1) {
     throw std::runtime_error("Failed to generate random nonce");
   }
 

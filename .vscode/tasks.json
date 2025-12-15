@@ -51,7 +51,7 @@
                 // Transport
                 "transport\\transport.cpp",
                 "transport\\compressor\\lz4_handler.cpp",
-                //"transport\\chiper\\chacha_handler.cpp",
+                "transport\\chiper\\chacha_handler.cpp",
                 // Models
                 "models\\connection.cpp",
                 "models\\message.cpp",
@@ -59,14 +59,22 @@
                 // Collector
                 "collector\\collector.cpp",
                 "collector\\commands_coll.cpp",
-                "-o",
-                "compiled\\main.exe",
-                "-lws2_32",
+                // Оптимизации
                 "-lnetapi32",
                 "-lole32",
                 "-loleaut32",
                 "-lwbemuuid",
                 "-liphlpapi",
+                // OpenSSL
+                "-lssl",
+                "-lcrypto",
+                "-lcrypt32",
+                "-lwsock32",
+                "-lgdi32",
+                "-lws2_32", // Должно быть после OpenSSL :)
+                // Output
+                "-o",
+                "compiled\\main.exe",
             ],
             "group": {
                 "kind": "build",
