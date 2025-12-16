@@ -6,6 +6,7 @@
 #include <VersionHelpers.h>
 #include <bcrypt.h>  // для BCryptGenRandom
 #include <lz4.h>
+#include <lz4frame.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <wincrypt.h>
@@ -25,230 +26,106 @@
 using namespace std;
 
 string CompressJsonString(string& jsonStr) {
-    if (jsonStr.empty()) {
-        return {};  // пустая строка → пустой результат
-    }
+  if (jsonStr.empty()) {
+    return {};
+  }
 
-    // 1. Определяем размер входных данных
-    size_t src_size = jsonStr.size();
-    int src_size_int = static_cast<int>(src_size);
+  size_t src_size = jsonStr.size();
 
-    // 2. Получаем верхнюю границу размера сжатых данных
-    int max_compressed_size = LZ4_compressBound(src_size_int);
-    if (max_compressed_size <= 0) {
-        throw runtime_error("LZ4_compressBound failed");
-    }
+  // 1. Получаем размер буфера, необходимого для Frame (он включает заголовки)
+  size_t max_dst_size = LZ4F_compressFrameBound(src_size, NULL);
 
-    // 3. Выделяем выходной буфер
-    string compressed;
-    compressed.resize(static_cast<size_t>(max_compressed_size));
+  string compressed;
+  compressed.resize(max_dst_size);
 
-    // 4. Сжимаем
-    int compressedSize =
-        LZ4_compress_default(jsonStr.data(),      // вход
-                             compressed.data(),   // выход
-                             src_size_int,        // размер входа
-                             max_compressed_size  // макс. размер выхода
-        );
+  // 2. Создаем Frame
+  // LZ4F_compressFrame сам запишет заголовки и магические байты, которые ждет
+  // Python
+  size_t compressedSize =
+      LZ4F_compressFrame(compressed.data(),  // Куда писать
+                         max_dst_size,       // Размер буфера
+                         jsonStr.data(),     // Что сжимать
+                         src_size,           // Размер исходных данных
+                         NULL                // Настройки по умолчанию
+      );
 
-    if (compressedSize <= 0) {
-        throw runtime_error("LZ4 compression failed");
-    }
+  if (LZ4F_isError(compressedSize)) {
+    throw runtime_error(string("LZ4 Frame compression failed: ") +
+                        LZ4F_getErrorName(compressedSize));
+  }
 
-    // 5. Обрезаем до реального размера
-    compressed.resize(static_cast<size_t>(compressedSize));
-    return compressed;
+  // 3. Обрезаем до реального размера
+  compressed.resize(compressedSize);
+  return compressed;
 }
 
-// Основная функция шифрования
-/*
-string EncryptRawWithNonce(const string& jsonStr, const string& key) {
-    if ((key).size() != 32) {
-        throw invalid_argument("ChaCha20 key must be 32 bytes (256 bits).");
-    }
+#include <openssl/sha.h>
 
-    // Генерация случайного 12-байтного nonce
-    vector<unsigned char> nonce(12);
-    if (!RAND_bytes(nonce.data(), static_cast<int>(nonce.size()))) {
-        throw runtime_error("Failed to generate random nonce.");
-    }
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        throw runtime_error("Failed to create cipher context.");
-    }
-
-    if (EVP_EncryptInit_ex(ctx, EVP_chacha20(), nullptr,
-                           reinterpret_cast<const unsigned char*>((key).data()),
-                           nonce.data()) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("Failed to initialize ChaCha20 encryption.");
-    }
-
-    vector<unsigned char> ciphertext(jsonStr.size() +
-                                     16);  // +16 для подстраховки
-    int len = 0;
-    int ciphertext_len = 0;
-
-    if (EVP_EncryptUpdate(
-            ctx, ciphertext.data(), &len,
-            reinterpret_cast<const unsigned char*>(jsonStr.data()),
-            static_cast<int>(jsonStr.size())) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("Encryption update failed.");
-    }
-    ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("Encryption final failed.");
-    }
-    ciphertext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    // Собираем nonce + шифротекст
-    vector<unsigned char> result;
-    result.insert(result.end(), nonce.begin(), nonce.end());
-    result.insert(result.end(), ciphertext.begin(),
-                  ciphertext.begin() + ciphertext_len);
-
-    // Возвращаем как base64
-    return Base64Encode(result.data(), result.size());
-}
-*/
-void printNonceAsInts(const std::vector<unsigned char>& nonce) {
-    for (unsigned char b : nonce) {
-        std::cout << static_cast<int>(b) << ' ';
-    }
-    std::cout << '\n';
+// 1. Хешируем ключ как в Python
+std::vector<unsigned char> DeriveKey(const std::string& raw_key) {
+  std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
+  SHA256(reinterpret_cast<const unsigned char*>(raw_key.c_str()),
+         raw_key.size(), hash.data());
+  return hash;
 }
 
-void printSha256(const std::vector<char>& data) {
-    HCRYPTPROV hProv = 0;
-    HCRYPTHASH hHash = 0;
-    BYTE rgbHash[32] = {0};
-    DWORD cbHash = sizeof(rgbHash);
+string EncryptRawWithNonce(const string& jsonStr, const string& raw_key) {
+  auto key = DeriveKey(raw_key);
+  std::vector<unsigned char> nonce(12);
+  RAND_bytes(nonce.data(), 12);
 
-    if (!CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_AES,
-                             CRYPT_VERIFYCONTEXT)) {
-        std::cerr << "CryptAcquireContext failed.\n";
-        return;
-    }
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr);
 
-    if (!CryptCreateHash(hProv, CALG_SHA_256, 0, 0, &hHash)) {
-        std::cerr << "CryptCreateHash failed.\n";
-        CryptReleaseContext(hProv, 0);
-        return;
-    }
+  // Установка длины nonce (по умолчанию 12, но лучше явно)
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, 12, nullptr);
+  EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data());
 
-    if (!CryptHashData(hHash, reinterpret_cast<const BYTE*>(data.data()),
-                       static_cast<DWORD>(data.size()), 0)) {
-        std::cerr << "CryptHashData failed.\n";
-        CryptDestroyHash(hHash);
-        CryptReleaseContext(hProv, 0);
-        return;
-    }
+  std::vector<unsigned char> ciphertext(jsonStr.size());
+  int len = 0;
+  EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
+                    reinterpret_cast<const unsigned char*>(jsonStr.data()),
+                    jsonStr.size());
 
-    if (!CryptGetHashParam(hHash, HP_HASHVAL, rgbHash, &cbHash, 0)) {
-        std::cerr << "CryptGetHashParam failed.\n";
-    } else {
-        std::ostringstream oss;
-        for (DWORD i = 0; i < cbHash; ++i) {
-            oss << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<int>(rgbHash[i]);
-        }
-        std::cout << "SHA-256: " << oss.str() << '\n';
-    }
+  EVP_EncryptFinal_ex(ctx, nullptr, &len);
 
-    CryptDestroyHash(hHash);
-    CryptReleaseContext(hProv, 0);
-}
+  // ПОЛУЧЕНИЕ ТЕГА (16 байт) - Критично для ChaCha20Poly1305
+  unsigned char tag[16];
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, 16, tag);
+  EVP_CIPHER_CTX_free(ctx);
 
-string EncryptRawWithNonce(const string& jsonStr, const string& key) {
-    // Проверка длины ключа
-    if (key.size() != 32) {
-        throw std::invalid_argument("ChaCha20 key must be exactly 32 bytes.");
-    }
+  // Формируем результат: [nonce(12)] + [ciphertext(N)] + [tag(16)]
+  std::string result;
+  result.append(reinterpret_cast<const char*>(nonce.data()), 12);
+  result.append(reinterpret_cast<const char*>(ciphertext.data()),
+                ciphertext.size());
+  result.append(reinterpret_cast<const char*>(tag), 16);
 
-    // Генерация 12-байтного nonce
-    std::vector<unsigned char> nonce(12);
-    if (!RAND_bytes(nonce.data(), static_cast<int>(nonce.size()))) {
-        throw runtime_error("Failed to generate random nonce.");
-    }
-    printNonceAsInts(nonce);
-    // Инициализация контекста шифрования
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        throw std::runtime_error("Failed to create cipher context.");
-    }
-
-    if (EVP_EncryptInit_ex(ctx, EVP_chacha20(), nullptr,
-                           reinterpret_cast<const unsigned char*>(key.data()),
-                           nonce.data()) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to initialize ChaCha20 encryption.");
-    }
-
-    // Шифрование
-    std::vector<unsigned char> ciphertext(jsonStr.size() +
-                                          16);  // +16 для подстраховки
-    int len = 0;
-    int ciphertext_len = 0;
-
-    if (EVP_EncryptUpdate(
-            ctx, ciphertext.data(), &len,
-            reinterpret_cast<const unsigned char*>(jsonStr.data()),
-            static_cast<int>(jsonStr.size())) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Encryption update failed.");
-    }
-    ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Encryption final failed.");
-    }
-    ciphertext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    // Формируем результат: [nonce][ciphertext] как бинарная строка
-    std::string result;
-    result.reserve(nonce.size() + ciphertext_len);
-    result.append(reinterpret_cast<const char*>(nonce.data()), nonce.size());
-    result.append(reinterpret_cast<const char*>(ciphertext.data()),
-                  ciphertext_len);
-
-    return result;
+  return result;
 }
 
 // Подготовка длины (в network byte order) на отправку
 string LenPreparationMessToSend(const string& text_str) {
-    uint32_t len = static_cast<uint32_t>(text_str.size());
-    uint32_t len_network = htonl(len);
-    // вектор (начало_диапазона, конец_буфера)
-    return string(
-        reinterpret_cast<const char*>(&len_network),
-        reinterpret_cast<const char*>(&len_network) + sizeof(len_network));
+  uint32_t len = static_cast<uint32_t>(text_str.size());
+  uint32_t len_network = htonl(len);
+  // вектор (начало_диапазона, конец_буфера)
+  return string(
+      reinterpret_cast<const char*>(&len_network),
+      reinterpret_cast<const char*>(&len_network) + sizeof(len_network));
 }
 
 void SendMessageAndMessageSize(SOCKET& client_socket, string& jsonStr,
                                Settings& settings) {
-    string comressed = CompressJsonString(jsonStr);
-    string encrypted = EncryptRawWithNonce(comressed, settings.key);
-    cout << "Compressed size: " << comressed.size() << " ";
-    cout << " | Encrypted size: " << encrypted.size() << endl;
+  string compressed = CompressJsonString(jsonStr);
+  string encrypted = EncryptRawWithNonce(compressed, settings.key);
 
-    // 1. подготовка длины (в network byte order) на отправку
-    string len_network = LenPreparationMessToSend(encrypted);
+  uint32_t len = static_cast<uint32_t>(encrypted.size());
+  uint32_t len_network = htonl(len);
 
-    string mess_str = len_network + encrypted;
-    std::vector<char> mess_char(mess_str.begin(), mess_str.end());
-    printSha256(mess_char);  // ← вызов перед send
-    // Если нужен завершающий \0 (для C-функций):
-    mess_char.push_back('\0');
+  // Отправляем заголовок (4 байта)
+  send(client_socket, reinterpret_cast<const char*>(&len_network), 4, 0);
+  // Отправляем тело (nonce + cipher + tag)
+  send(client_socket, encrypted.data(), encrypted.size(), 0);
 
-    printSha256(mess_char);  // ← вызов перед send
-    send(client_socket, mess_char.data(), mess_char.size(), 0);
+  // НИКАКИХ mess_char.push_back('\0')!
 }
