@@ -67,6 +67,8 @@
                 "-loleaut32",
                 "-lwbemuuid",
                 "-liphlpapi",
+                //
+                "-lbCrypt",
                 // OpenSSL
                 "-lssl",
                 "-lcrypto",
