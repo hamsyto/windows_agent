@@ -2,15 +2,28 @@
 // порядок подключения
 #include <windows.h>
 
-#include "commands_main.h"
+#include <iostream>
+
+#include "models/connection.h"
+#include "transport/transport.h"
+
 using namespace std;
 
 int main() {
-  if (SendMessages() == 1) {
+    // сбор данных для подключения
+    Settings settings = {};
+    if (!LoadEnvSettings(settings)) return 1;
+    cout << settings.ip_server << ":" << settings.port_server << endl;
+
+    Connection client(settings);
+
+    // проверка подключение, всё ли правильно сработало
+
+    while (true) {
+        /// client.RecvBytes();
+        client.SendBytes(settings);
+    }
+    // освобождение ресурсов Winsock
     WSACleanup();
     return 1;
-  }
-  // освобождение ресурсов Winsock
-  WSACleanup();
-  return 0;
 }

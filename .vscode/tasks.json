@@ -50,7 +50,6 @@
                 // "-O2", // релиз
                 "-g",
                 "main.cpp",
-                "commands_main.cpp",
                 // Transport
                 "transport\\transport.cpp",
                 "transport\\compressor\\lz4_handler.cpp",

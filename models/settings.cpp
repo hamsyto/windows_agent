@@ -10,6 +10,31 @@
 
 using namespace std;
 
+bool LoadEnvSettings(Settings& out) {
+    unordered_map<string, string> env_map = ClearEnvFile();
+
+    // Проверяем наличие всех нужных переменных
+    if (env_map.find("IDLE_TIME") == env_map.end() ||
+        env_map.find("IP_SERVER") == env_map.end() ||
+        env_map.find("PORT_SERVER") == env_map.end() ||
+        env_map.find("KEY") == env_map.end()) {
+        cout << "Ошибка: в .env отсутствуют обязательные переменные\n";
+        return false;
+    }
+
+    try {
+        out.idle_time = stoi(env_map["IDLE_TIME"]);
+        out.ip_server = env_map["IP_SERVER"];
+        out.port_server = stoi(env_map["PORT_SERVER"]);
+        out.key = env_map["KEY"];
+    } catch (const exception& e) {
+        cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
+        return false;
+    }
+
+    return true;
+}
+
 std::unordered_map<string, string> ClearEnvFile() {
     ifstream file(kEnvFile);  // ищет .env файл
     if (!file.is_open()) {
@@ -45,31 +70,6 @@ std::unordered_map<string, string> ClearEnvFile() {
     }
     file.close();
     return env_map;
-}
-// читает .env и заполняет Settings
-bool LoadEnvSettings(Settings& out) {
-    unordered_map<string, string> env_map = ClearEnvFile();
-
-    // Проверяем наличие всех нужных переменных
-    if (env_map.find("IDLE_TIME") == env_map.end() ||
-        env_map.find("IP_SERVER") == env_map.end() ||
-        env_map.find("PORT_SERVER") == env_map.end() ||
-        env_map.find("KEY") == env_map.end()) {
-        cout << "Ошибка: в .env отсутствуют обязательные переменные\n";
-        return false;
-    }
-
-    try {
-        out.idle_time = stoi(env_map["IDLE_TIME"]);
-        out.ip_server = env_map["IP_SERVER"];
-        out.port_server = stoi(env_map["PORT_SERVER"]);
-        out.key = env_map["KEY"];
-    } catch (const exception& e) {
-        cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
-        return false;
-    }
-
-    return true;
 }
 
 string Trim(const string& str) {
