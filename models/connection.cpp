@@ -17,19 +17,23 @@
 using namespace std;
 
 // Конструктор получает Settings по константной ссылке
-Connection::Connection(Settings& settings) {
+Connection::Connection() {
     // свойства
     Socket = INVALID_SOCKET;
     connected = false;
     agent_id = 0;
+    // сбор данных для подключения
+    settings = {};
+    if (!LoadEnvSettings(settings)) return;
+    cout << settings.ip_server << ":" << settings.port_server << endl;
 
     // методы
     if (WinsockInit() != 0) return;
     while (agent_id == 0) {
-        agent_id = Registration(settings);
+        agent_id = Registration();
     }
     cout << "ID: " << agent_id << " saved\n";
-    Disconnect(settings);
+    Disconnect();
 }
 
 // Методы
@@ -46,9 +50,9 @@ int Connection::WinsockInit() {
     return 0;
 }
 
-void Connection::Connect(Settings& settings) {
+void Connection::Connect() {
     if (Socket != INVALID_SOCKET) {
-        Disconnect(settings);
+        Disconnect();
     }
 
     Socket = InitConnectSocket();
@@ -56,7 +60,7 @@ void Connection::Connect(Settings& settings) {
         cout << "connect_socket don't init" << endl;
         connected = false;
     }
-    if (ConnectServer(settings) > 0) connected = true;
+    if (ConnectServer() > 0) connected = true;
 
     if (!connected) {
         CloseSocketCheck(Socket);
@@ -64,8 +68,8 @@ void Connection::Connect(Settings& settings) {
     }
 }
 
-void Connection::SendData(Settings& settings) {
-    Connect(settings);
+void Connection::SendData() {
+    Connect();
     if (!connected) return;
 
     Message msg = {};
@@ -83,15 +87,15 @@ void Connection::SendData(Settings& settings) {
     if (error == "") {
         SendMessageAndMessageSize(Socket, json_msg, settings);
     } else {
-        SendTypeMsgError(error, settings);
+        SendTypeMsgError(error);
     }
 }
 
 // TODO: Создать файл и записать (переделать возврат функции на INT (agent_id))
-int32_t Connection::Registration(Settings& settings) {
+int32_t Connection::Registration() {
     uint32_t id = 0;
     while (id == 0) {
-        SendData(settings);
+        SendData();
         if (!connected) continue;
         id = RecvBytes();  // нужно как-то отпределять что пришло и
                            // возвращать только нужное
@@ -103,13 +107,13 @@ int32_t Connection::Registration(Settings& settings) {
             }
         } catch (const exception& e) {
             string error = e.what();
-            SendTypeMsgError(error, settings);
+            SendTypeMsgError(error);
         }
     }
     return 0;
 }
 
-void Connection::SendTypeMsgError(string& error, Settings& settings) {
+void Connection::SendTypeMsgError(string& error) {
     Message msg = {};
     msg.header.agent_id = agent_id;
     msg.header.type = "error";
@@ -128,7 +132,7 @@ SOCKET Connection::InitConnectSocket() {
     return connect_socket;
 }
 
-int Connection::ConnectServer(Settings& settings) {
+int Connection::ConnectServer() {
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     // преобразует 16-битное число в сетевой порядок
@@ -175,14 +179,14 @@ uint32_t Connection::RecvBytes() {
     return id;
 }
 
-void Connection::SendBytes(Settings& settings) {
+void Connection::SendBytes() {
     if (agent_id == 0) {
-        agent_id = Registration(settings);
+        agent_id = Registration();
     }
-    SendData(settings);
+    SendData();
 }
 
-void Connection::Disconnect(Settings& settings) {
+void Connection::Disconnect() {
     if (Socket == INVALID_SOCKET) return;
     CloseSocketCheck(Socket);
     connected = false;

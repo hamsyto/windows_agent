@@ -4,24 +4,20 @@
 
 #include <iostream>
 
+#include "models/IConnection.h"
 #include "models/connection.h"
 #include "transport/transport.h"
 
 using namespace std;
 
 int main() {
-    // сбор данных для подключения
-    Settings settings = {};
-    if (!LoadEnvSettings(settings)) return 1;
-    cout << settings.ip_server << ":" << settings.port_server << endl;
-
-    Connection client(settings);
+    Connection client;
 
     // проверка подключение, всё ли правильно сработало
 
     while (true) {
         /// client.RecvBytes();
-        client.SendBytes(settings);
+        client.SendBytes();
     }
     // освобождение ресурсов Winsock
     WSACleanup();
