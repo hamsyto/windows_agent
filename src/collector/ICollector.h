@@ -20,7 +20,7 @@ class ICollector {
 
  public:
   virtual ~ICollector() = default;
-  virtual SimplePCReport GetPayLoad() = 0;
+  virtual SimplePCReport GetPayload() = 0;
 };
 
 std::unique_ptr<ICollector> CreateCollector(const Settings& settings);

@@ -14,7 +14,7 @@
 
 using namespace std;
 
-// WindowsCollector::WindowsCollector(Message& msg) {}
+WindowsCollector::WindowsCollector(const Settings& settings) {}
 
 vector<Disk> WindowsCollector::GetDisks() {
   vector<Disk> disks;

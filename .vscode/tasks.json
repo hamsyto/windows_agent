@@ -36,6 +36,7 @@
                 "-static-libstdc++",
                 // Библиотеки
                 "-Ilibs/lz4",
+                "-Ilibs/json",
                 // Архивирование
                 "libs\\lz4\\lz4.c",
                 "libs\\lz4\\lz4hc.c",
@@ -55,14 +56,15 @@
                 "src\\transport\\compressor\\lz4_handler.cpp",
                 "src\\transport\\chiper\\chacha_handler.cpp",
                 // Models
-                "src\\models\\connection.cpp",
                 "src\\models\\message.cpp",
                 "src\\models\\settings.cpp",
                 // Scenario
                 "src\\scenarios\\scenarios.cpp",
                 // Collector
-                // "src\\collector\\collector.cpp",
-                // "src\\collector\\commands_coll.cpp",
+                "src\\collector\\windows\\collector.cpp",
+                "src\\collector\\windows\\helpers.cpp",
+                // Connection
+                "src\\connection\\windows\\connection.cpp",
                 // Оптимизации
                 "-lnetapi32",
                 "-lole32",

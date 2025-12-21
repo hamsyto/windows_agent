@@ -15,7 +15,6 @@ class IConnection {
   virtual ~IConnection() = default;  // виртуальный деструктор (важно!)
 
   virtual bool IsConnected() const = 0;
-  virtual void InitSocketLibrary() = 0;
   virtual bool Connect() = 0;
   virtual bool Disconnect() = 0;
   virtual void Send(const char* data, size_t size) = 0;

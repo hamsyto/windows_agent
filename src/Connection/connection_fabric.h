@@ -6,9 +6,12 @@
 #include <memory>
 
 #include "IConnection.h"
-#include "Windows/windowsConnection.h"
 
-std::unique_ptr<IConnection> CreateConnection(const Settings& settings) {
+#ifdef _WIN32
+#include "windows/connection.h"
+#endif
+
+inline std::unique_ptr<IConnection> CreateConnection(const Settings& settings) {
 #ifdef _WIN32
   return std::make_unique<WindowsConnection>(settings);
 #else

@@ -2,7 +2,8 @@
 
 #include "message.h"
 
-#include "../../libs/json/json.hpp"
+#include <json.hpp>
+
 #include "../collector/windows/collector.h"
 
 using namespace std;

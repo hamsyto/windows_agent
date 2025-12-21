@@ -43,7 +43,7 @@ int main() {
 
   // 1. Регистрация
   if (settings.agentID < 0) {
-    int newID = Registrate(collector->GetPayLoad(), connection.get(), settings);
+    int newID = Registrate(collector->GetPayload(), connection.get(), settings);
     if (newID != -1) {
       settings.agentID = newID;
       cout << "New Agent ID: " << settings.agentID << endl;
@@ -54,7 +54,7 @@ int main() {
 
   // 2. Цикл отчетов
   while (true) {
-    SendReport(collector->GetPayLoad(), connection.get(), settings);
+    SendReport(collector->GetPayload(), connection.get(), settings);
     cout << "Report sent" << endl;
     Sleep(settings.idle_time * 1000);
   }

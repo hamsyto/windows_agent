@@ -19,8 +19,9 @@ class WindowsCollector : public ICollector {
   Ping GetPing() override;
 
  public:
+  explicit WindowsCollector(const Settings& settings);
   explicit WindowsCollector(Message& msg);
-  SimplePCReport GetPayload();
+  SimplePCReport GetPayload() override;
 };
 
 #endif  // WINDOWS_COLLECTOR_H
