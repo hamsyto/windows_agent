@@ -11,15 +11,8 @@ class WindowsCollector : public ICollector {
    private:
     Settings settings_;
 
-    std::vector<Disk> GetDisksImpl();
-    RAM GetRamImpl();
-    CPU GetCpuImpl();
-    OS GetOsImpl();
-    Hardware GetHardwareImpl();
-    Ping GetPingImpl();
-
    public:
-    explicit WindowsCollector(const Settings& settings);
+    explicit WindowsCollector(Message& msg);
 
     std::vector<Disk> GetDisks() override;
     RAM GetRam() override;
@@ -27,7 +20,8 @@ class WindowsCollector : public ICollector {
     OS GetOs() override;
     Hardware GetHardware() override;
     Ping GetPing() override;
-    Message Collect() override;
+
+    Message GetPayload() override;
 };
 
 #endif  // WINDOWS_COLLECTOR_H

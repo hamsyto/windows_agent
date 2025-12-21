@@ -1,10 +1,10 @@
-// Windows/WindowsConnection.h
+// windowsConnection.h
 #ifndef WINDOWS_CONNECTION_H
 #define WINDOWS_CONNECTION_H
 
 #include <winsock2.h>
-
-#include <vector>
+// порядок подключения
+#include <windows.h>
 
 #include "../IConnection.h"
 
@@ -20,7 +20,7 @@ class WindowsConnection : public IConnection {
 
     bool Connect() override;
     bool Disconnect() override;
-    void Send(string data) override;
+    void Send(const std::string& data) override;
     std::vector<char> Recv(size_t maxBytes = 4096) override;
 
     // Вспомогательный метод (опционально)

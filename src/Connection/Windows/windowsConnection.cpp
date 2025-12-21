@@ -1,14 +1,10 @@
-// connection.cpp
-#include "connection.h"
+// windowsConnection.cpp
+#include "windowsConnection.h"
 
-#include <winsock2.h>
-// порядок подключения
-#include <windows.h>
 #include <ws2tcpip.h>
 
 #include <iostream>
-#include <string>
-#include <vector>
+
 // #include <>
 
 #include <stdexcept>
@@ -66,7 +62,7 @@ bool WindowsConnection::Disconnect() {
 }
 
 // передаётся полностью заполненый json (id и тп)
-void WindowsConnection::Send(string data) {
+void WindowsConnection::Send(const string& data) {
     if (socket_ == INVALID_SOCKET) {
         throw runtime_error("Connection to the server is lost");
         // return false;
@@ -74,21 +70,25 @@ void WindowsConnection::Send(string data) {
 
     uint32_t len = static_cast<uint32_t>(data.size());
     uint32_t len_network = htonl(len);
-    vector<char> message(data.begin(), data.end());
 
-    if (data == nullptr || len == 0) {
+    if (data == "" || len == 0) {
         return;
     }
+    vector<char> message(data.begin(), data.end());
 
-    if (socket_ == INVALID_SOCKET) {
-        cout << "connection to the server is lost" << endl;
-    }
-    // доделать проверку что всё правильно отправилось
     // Отправляем заголовок (4 байта)
-    send(socket_, reinterpret_cast<const char*>(&len_network), 4, 0);
+    int result =
+        send(socket_, reinterpret_cast<const char*>(&len_network), 4, 0);
+    if (result == SOCKET_ERROR) {
+        // В Windows: WSAGetLastError()
+        throw runtime_error("Failed to send data: socket error");
+    }
+    result = 0;
     // Отправляем тело (nonce + cipher + tag)
-    send(socket_, message.data(), message.size(), 0);
-
+    result = send(socket_, message.data(), message.size(), 0);
+    if (result == SOCKET_ERROR) {
+        throw runtime_error("Failed to send data: socket error");
+    }
     // НИКАКИХ mess_char.push_back('\0')!
 }
 

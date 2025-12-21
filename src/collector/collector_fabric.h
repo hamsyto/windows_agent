@@ -1,4 +1,6 @@
 // collector_fabric.h
+#ifndef COLLECTOR_FABRIC_H
+#define COLLECTOR_FABRIC_H
 
 #include "ICollector.h"
 #include "windows/collector.h"
@@ -11,3 +13,5 @@ std::unique_ptr<ICollector> CreateCollector(const Settings& settings) {
     return nullptr;
 #endif
 }
+
+#endif

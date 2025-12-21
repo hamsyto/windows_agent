@@ -39,7 +39,15 @@ int main() {
     Settings settings = LoadEnvSettings(kFileName);
     auto connection = CreateConnection(settings);
     connection->Connect();
+
     auto collector = CreateCollector(settings);
+
+    while (true) {
+        collector->GetPayload();
+
+        string message = GetMassage(collector);
+        connection->Send(message);
+    }
 
     Shutdown();
     return 0;

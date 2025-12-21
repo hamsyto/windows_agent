@@ -8,19 +8,12 @@
 using namespace std;
 using json = nlohmann::json;
 
-Message GetMess(Message& msg, Collector& collector) {
+Message GetMess(Message& msg) {
     if (msg.header.agent_id == 0) {
         msg.header.type = "whoami";
     } else if (msg.header.type != "error") {
         msg.header.type = "SimplePCReport";
     }
-
-    msg.payload.disks = collector->GetDisks();
-    msg.payload.ram = GetRam();
-    msg.payload.cpu = GetCpu();
-    msg.payload.system = GetOs();
-    msg.payload.hardware = GetHardware();
-    msg.payload.ping_m = GetPing();
 
     return msg;
 }

@@ -19,9 +19,10 @@ class ICollector {
     virtual OS GetOs() = 0;
     virtual Hardware GetHardware() = 0;
     virtual Ping GetPing() = 0;
-    virtual Message Collect() = 0;
+
+    virtual Message GetPayLoad() = 0;
 };
 
 std::unique_ptr<ICollector> CreateCollector(const Settings& settings);
 
-#endif  // ICOLLECTOR_H
+#endif

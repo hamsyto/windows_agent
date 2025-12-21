@@ -14,8 +14,7 @@
 
 using namespace std;
 
-WindowsCollector::WindowsCollector(const Settings& settings)
-    : settings_(settings) {}
+WindowsCollector::WindowsCollector(Message& msg) {}
 
 vector<Disk> WindowsCollector::GetDisks() {
     vector<Disk> disks;
@@ -123,4 +122,13 @@ Ping WindowsCollector::GetPing() {
     return ping_m;
 }
 
-Message WindowsCollector::Collect() { throw std::runtime_error("не сделано"); }
+Message WindowsCollector::GetPayload(Message& msg) {
+    msg.payload.disks = GetDisks();
+    msg.payload.ram = GetRam();
+    msg.payload.cpu = GetCpu();
+    msg.payload.system = GetOs();
+    msg.payload.hardware = GetHardware();
+    msg.payload.ping_m = GetPing();
+
+    return msg;
+}

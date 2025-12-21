@@ -4,6 +4,7 @@
 #define ICONNECTION_H
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../models/settings.h"
@@ -17,8 +18,8 @@ class IConnection {
     virtual ~IConnection() = default;  // виртуальный деструктор (важно!)
 
     virtual bool Connect() = 0;
-    virtual void Disconnect() = 0;
-    virtual void Send(const char* data, size_t size) = 0;
+    virtual bool Disconnect() = 0;
+    virtual void Send(const std::string& data) = 0;
     virtual std::vector<char> Recv(size_t maxBytes = 4096) = 0;
 };
 
