@@ -31,14 +31,8 @@ int main() {
 
   Settings settings = LoadEnvSettings(kFileName);
 
-  // connection — это unique_ptr
+  // connection и collector - это unique_ptr
   auto connection = CreateConnection(settings);
-
-  if (!connection || !connection->Connect()) {
-    cout << "Connection failed" << endl;
-    return 1;
-  }
-
   auto collector = CreateCollector(settings);
 
   // 1. Регистрация
