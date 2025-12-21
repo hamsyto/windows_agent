@@ -1,27 +1,41 @@
-// transport.h
+// transport/transport.h
+
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
-#include <winsock2.h>
-// порядок подключения
-#include <windows.h>
-// специализированные заголовки Windows
-#include <VersionHelpers.h>
-#include <winioctl.h>
-
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "../models/message.h"
+#include "../connection/IConnection.h"
 #include "../models/settings.h"
 
-std::string CompressJsonString(const std::string& jsonStr);
-// Основная функция шифрования
-std::string EncryptRawWithNonce(const std::string& jsonStr,
-                                const std::string& key);
-std::string LenPreparationMessToSend(const std::string& text_str);
-// отправляет сначала длину потом само сообщение
-void SendMessageAndMessageSize(SOCKET& client_socket, std::string& jsonStr,
-                               Settings& settings);
+class Transport {
+ public:
+  Transport(const Settings& settings, IConnection& connection);
+  virtual ~Transport() = default;
+
+  // Публичный интерфейс
+  void SendData(const std::string& jsonStr);
+  std::string RecvData();
+
+ protected:
+  // Вспомогательные методы трансформации данных
+  std::string Compress(const std::string& data);
+  std::string Encrypt(const std::string& data);
+  std::string Decrypt(const std::string& encryptedData);
+
+  // Хеширование ключа (SHA256)
+  std::vector<unsigned char> DeriveKey(const std::string& rawKey);
+
+ private:
+  const Settings& m_settings;
+  IConnection& m_connection;
+
+  // Константы для протокола
+  static constexpr size_t NONCE_SIZE = 12;
+  static constexpr size_t TAG_SIZE = 16;
+};
 
 #endif

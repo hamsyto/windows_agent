@@ -49,18 +49,20 @@
                 "-fdiagnostics-color=always",
                 // "-O2", // релиз
                 "-g",
-                "main.cpp",
+                "src\\main.cpp",
                 // Transport
-                "transport\\transport.cpp",
-                "transport\\compressor\\lz4_handler.cpp",
-                "transport\\chiper\\chacha_handler.cpp",
+                "src\\transport\\transport.cpp",
+                "src\\transport\\compressor\\lz4_handler.cpp",
+                "src\\transport\\chiper\\chacha_handler.cpp",
                 // Models
-                "models\\connection.cpp",
-                "models\\message.cpp",
-                "models\\settings.cpp",
+                "src\\models\\connection.cpp",
+                "src\\models\\message.cpp",
+                "src\\models\\settings.cpp",
+                // Scenario
+                "src\\scenarios\\scenarios.cpp",
                 // Collector
-                "collector\\collector.cpp",
-                "collector\\commands_coll.cpp",
+                // "src\\collector\\collector.cpp",
+                // "src\\collector\\commands_coll.cpp",
                 // Оптимизации
                 "-lnetapi32",
                 "-lole32",

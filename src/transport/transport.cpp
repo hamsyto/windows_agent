@@ -1,124 +1,159 @@
-// transport.cpp
-#include <winsock2.h>
-// порядок подключения
-#include <windows.h>
-// специализированные заголовки Windows
+#include "transport.h"
+
 #include <lz4.h>
 #include <lz4frame.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
-
-#include <cstdint>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include "../consts.h"
-#include "transport.h"
-using namespace std;
-
-string CompressJsonString(string& jsonStr) {
-    if (jsonStr.empty()) {
-        return {};
-    }
-
-    size_t src_size = jsonStr.size();
-
-    // 1. Получаем размер буфера, необходимого для Frame (он включает заголовки)
-    size_t max_dst_size = LZ4F_compressFrameBound(src_size, NULL);
-
-    string compressed;
-    compressed.resize(max_dst_size);
-
-    // 2. Создаем Frame
-    // LZ4F_compressFrame сам запишет заголовки и магические байты, которые ждет
-    // Python
-    size_t compressedSize =
-        LZ4F_compressFrame(compressed.data(),  // Куда писать
-                           max_dst_size,       // Размер буфера
-                           jsonStr.data(),     // Что сжимать
-                           src_size,           // Размер исходных данных
-                           NULL                // Настройки по умолчанию
-        );
-
-    if (LZ4F_isError(compressedSize)) {
-        throw runtime_error(string("LZ4 Frame compression failed: ") +
-                            LZ4F_getErrorName(compressedSize));
-    }
-
-    // 3. Обрезаем до реального размера
-    compressed.resize(compressedSize);
-    return compressed;
-}
-
 #include <openssl/sha.h>
+#include <winsock2.h>
 
-// 1. Хешируем ключ как в Python
-std::vector<unsigned char> DeriveKey(const std::string& raw_key) {
-    std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
-    SHA256(reinterpret_cast<const unsigned char*>(raw_key.c_str()),
-           raw_key.size(), hash.data());
-    return hash;
+#include <stdexcept>
+
+Transport::Transport(const Settings& settings, IConnection& connection)
+    : m_settings(settings), m_connection(connection) {}
+
+// --- Публичные методы ---
+
+void Transport::SendData(const std::string& jsonStr) {
+  // 1. Сжимаем
+  std::string compressed = Compress(jsonStr);
+  // 2. Шифруем
+  std::string encrypted = Encrypt(compressed);
+
+  // 3. Подготавливаем заголовок длины (network byte order)
+  uint32_t len = static_cast<uint32_t>(encrypted.size());
+  uint32_t len_network = htonl(len);
+
+  std::string header(reinterpret_cast<const char*>(&len_network),
+                     sizeof(len_network));
+
+  // 4. Отправляем: сначала заголовок, потом тело
+  m_connection.Send(header);
+  m_connection.Send(encrypted);
 }
 
-string EncryptRawWithNonce(const string& jsonStr, const string& raw_key) {
-    auto key = DeriveKey(raw_key);
-    std::vector<unsigned char> nonce(12);
-    RAND_bytes(nonce.data(), 12);
+std::string Transport::RecvData() {
+  // 1. Получаем 4 байта длины
+  std::vector<char> headerData = m_connection.Recv(4);
+  if (headerData.size() < 4) {
+    throw std::runtime_error("Failed to receive message header");
+  }
 
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr);
+  uint32_t len_network;
+  memcpy(&len_network, headerData.data(), 4);
+  uint32_t payloadSize = ntohl(len_network);
 
-    // Установка длины nonce (по умолчанию 12, но лучше явно)
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, 12, nullptr);
-    EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data());
+  // 2. Получаем само зашифрованное сообщение
+  std::vector<char> encryptedRaw = m_connection.Recv(payloadSize);
+  if (encryptedRaw.size() < payloadSize) {
+    throw std::runtime_error("Incomplete message body received");
+  }
 
-    std::vector<unsigned char> ciphertext(jsonStr.size());
-    int len = 0;
-    EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
-                      reinterpret_cast<const unsigned char*>(jsonStr.data()),
-                      jsonStr.size());
+  std::string encryptedStr(encryptedRaw.begin(), encryptedRaw.end());
 
-    EVP_EncryptFinal_ex(ctx, nullptr, &len);
-
-    // ПОЛУЧЕНИЕ ТЕГА (16 байт) - Критично для ChaCha20Poly1305
-    unsigned char tag[16];
-    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, 16, tag);
-    EVP_CIPHER_CTX_free(ctx);
-
-    // Формируем результат: [nonce(12)] + [ciphertext(N)] + [tag(16)]
-    std::string result;
-    result.append(reinterpret_cast<const char*>(nonce.data()), 12);
-    result.append(reinterpret_cast<const char*>(ciphertext.data()),
-                  ciphertext.size());
-    result.append(reinterpret_cast<const char*>(tag), 16);
-
-    return result;
+  // 3. Расшифровываем (по вашему запросу - без разархивации)
+  return Decrypt(encryptedStr);
 }
 
-// Подготовка длины (в network byte order) на отправку
-string LenPreparationMessToSend(const string& text_str) {
-    uint32_t len = static_cast<uint32_t>(text_str.size());
-    uint32_t len_network = htonl(len);
-    // вектор (начало_диапазона, конец_буфера)
-    return string(
-        reinterpret_cast<const char*>(&len_network),
-        reinterpret_cast<const char*>(&len_network) + sizeof(len_network));
+// --- Защищенные методы (логика) ---
+
+std::string Transport::Compress(const std::string& data) {
+  if (data.empty()) return {};
+
+  size_t max_dst_size = LZ4F_compressFrameBound(data.size(), NULL);
+  std::string compressed;
+  compressed.resize(max_dst_size);
+
+  size_t compressedSize = LZ4F_compressFrame(&compressed[0], max_dst_size,
+                                             data.data(), data.size(), NULL);
+
+  if (LZ4F_isError(compressedSize)) {
+    throw std::runtime_error("LZ4 compression failed");
+  }
+
+  compressed.resize(compressedSize);
+  return compressed;
 }
 
-void SendMessageAndMessageSize(SOCKET& client_socket, string& jsonStr,
-                               Settings& settings) {
-    string compressed = CompressJsonString(jsonStr);
-    string encrypted = EncryptRawWithNonce(compressed, settings.key);
+std::vector<unsigned char> Transport::DeriveKey(const std::string& rawKey) {
+  std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
+  SHA256(reinterpret_cast<const unsigned char*>(rawKey.c_str()), rawKey.size(),
+         hash.data());
+  return hash;
+}
 
-    uint32_t len = static_cast<uint32_t>(encrypted.size());
-    uint32_t len_network = htonl(len);
+std::string Transport::Encrypt(const std::string& data) {
+  auto key = DeriveKey(m_settings.key);
+  std::vector<unsigned char> nonce(NONCE_SIZE);
+  RAND_bytes(nonce.data(), NONCE_SIZE);
 
-    // не send а класс connection
-    // Отправляем заголовок (4 байта)
-    send(client_socket, reinterpret_cast<const char*>(&len_network), 4, 0);
-    // Отправляем тело (nonce + cipher + tag)
-    send(client_socket, encrypted.data(), encrypted.size(), 0);
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  EVP_EncryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr);
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, NONCE_SIZE, nullptr);
+  EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data());
 
-    // НИКАКИХ mess_char.push_back('\0')!
+  std::string ciphertext;
+  ciphertext.resize(data.size());
+  int len = 0;
+  EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(&ciphertext[0]), &len,
+                    reinterpret_cast<const unsigned char*>(data.data()),
+                    data.size());
+
+  int final_len = 0;
+  EVP_EncryptFinal_ex(ctx, nullptr, &final_len);
+
+  unsigned char tag[TAG_SIZE];
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag);
+  EVP_CIPHER_CTX_free(ctx);
+
+  // Сборка: nonce + ciphertext + tag
+  std::string result;
+  result.reserve(NONCE_SIZE + ciphertext.size() + TAG_SIZE);
+  result.append(reinterpret_cast<const char*>(nonce.data()), NONCE_SIZE);
+  result.append(ciphertext);
+  result.append(reinterpret_cast<const char*>(tag), TAG_SIZE);
+
+  return result;
+}
+
+std::string Transport::Decrypt(const std::string& encryptedData) {
+  if (encryptedData.size() < NONCE_SIZE + TAG_SIZE) {
+    throw std::runtime_error("Encrypted message too short");
+  }
+
+  auto key = DeriveKey(m_settings.key);
+
+  // Извлекаем компоненты
+  const char* pRaw = encryptedData.data();
+  const unsigned char* nonce = reinterpret_cast<const unsigned char*>(pRaw);
+  const unsigned char* ciphertext =
+      reinterpret_cast<const unsigned char*>(pRaw + NONCE_SIZE);
+  size_t cipherLen = encryptedData.size() - NONCE_SIZE - TAG_SIZE;
+  const unsigned char* tag =
+      reinterpret_cast<const unsigned char*>(pRaw + NONCE_SIZE + cipherLen);
+
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  EVP_DecryptInit_ex(ctx, EVP_chacha20_poly1305(), nullptr, nullptr, nullptr);
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, NONCE_SIZE, nullptr);
+  EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce);
+
+  std::string plaintext;
+  plaintext.resize(cipherLen);
+  int len = 0;
+  EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(&plaintext[0]), &len,
+                    ciphertext, cipherLen);
+
+  // Установка тега ПЕРЕД Final
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE,
+                      const_cast<unsigned char*>(tag));
+
+  int ret = EVP_DecryptFinal_ex(ctx, nullptr, &len);
+  EVP_CIPHER_CTX_free(ctx);
+
+  if (ret <= 0) {
+    throw std::runtime_error(
+        "Decryption failed (tag mismatch or data corrupted)");
+  }
+
+  return plaintext;
 }
