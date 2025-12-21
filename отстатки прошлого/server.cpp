@@ -178,7 +178,7 @@ int main() {
     }
 
     SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET_VAL) {
+    if (listenSocket == INVALID_SOCKET) {
         std::cerr << "socket() failed." << std::endl;
         WSACleanup();
         return 1;
@@ -209,7 +209,7 @@ int main() {
     int x = 0;
     while (true) {
         SOCKET clientSocket = accept(listenSocket, nullptr, nullptr);
-        if (clientSocket == INVALID_SOCKET_VAL) {
+        if (clientSocket == INVALID_SOCKET) {
             std::cerr << "accept() failed." << std::endl;
             continue;
         }
