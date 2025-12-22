@@ -66,6 +66,7 @@
                 "src\\connection\\windows\\connection.cpp",
                 // Оптимизации
                 "-lnetapi32",
+                "-lsetupapi",
                 "-lole32",
                 "-loleaut32",
                 "-lwbemuuid",

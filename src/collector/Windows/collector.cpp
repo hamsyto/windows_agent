@@ -17,118 +17,151 @@
 using namespace std;
 
 WindowsCollector::WindowsCollector(const Settings& settings) {
-  settings_ = settings;
+    settings_ = settings;
 }
 
 vector<Disk> WindowsCollector::GetDisks() {
-  vector<Disk> disks;
-  DWORD drives = GetLogicalDrives();
+    vector<Disk> disks;
+    DWORD drives = GetLogicalDrives();
 
-  for (char letter = 'A'; letter <= 'Z'; ++letter) {
-    if (!(drives & (1U << (letter - 'A')))) continue;
+    for (char letter = 'A'; letter <= 'Z'; ++letter) {
+        if (!(drives & (1U << (letter - 'A')))) continue;
 
-    string root = string(1, letter) + ":\\";
-    if (GetDriveTypeA(root.c_str()) != DRIVE_FIXED) continue;
+        string root = string(1, letter) + ":\\";
+        if (GetDriveTypeA(root.c_str()) != DRIVE_FIXED) continue;
 
-    int diskIndex = GetPhysicalDiskIndexForDriveLetter(letter);
-    if (diskIndex < 0) continue;
+        int diskIndex = GetPhysicalDiskIndexForDriveLetter(letter);
+        if (diskIndex < 0) continue;
 
-    auto info = FillDiskInfo(diskIndex, root);
-    disks.push_back(info);
-  }
-  return disks;
+        string busType = GetBusType(diskIndex);
+        // исключаем USB
+        if (busType == "USB") continue;
+
+        auto info = FillDiskInfo(diskIndex, root);
+        disks.push_back(info);
+    }
+    return disks;
+}
+
+std::vector<USB> WindowsCollector::GetUSBs() {
+    std::vector<USB> usbs;
+    DWORD drives = GetLogicalDrives();
+
+    for (char letter = 'A'; letter <= 'Z'; ++letter) {
+        if (!(drives & (1U << (letter - 'A')))) continue;
+
+        std::string root = std::string(1, letter) + ":\\";
+        UINT driveType = GetDriveTypeA(root.c_str());
+
+        // Только съёмные носители
+        if (driveType != DRIVE_REMOVABLE) continue;
+
+        int diskIndex = GetPhysicalDiskIndexForDriveLetter(letter);
+        if (diskIndex < 0) continue;
+
+        // Убеждаемся, что это именно USB
+        if (GetBusType(diskIndex) != "USB") continue;
+
+        auto info = FillUSBInfo(root, diskIndex);
+
+        usbs.push_back(info);
+    }
+    return usbs;
 }
 
 RAM WindowsCollector::GetRam() {
-  RAM ram = {};
-  MEMORYSTATUSEX m{};
-  m.dwLength = sizeof(m);
-  ULONGLONG installedKB = 0;
+    RAM ram = {};
+    MEMORYSTATUSEX m{};
+    m.dwLength = sizeof(m);
+    ULONGLONG installedKB = 0;
 
-  if (GetPhysicallyInstalledSystemMemory(&installedKB)) {
-    ram.total = installedKB * 1024;
-  }
-  if (GlobalMemoryStatusEx(&m)) {
-    if (ram.total == 0) ram.total = m.ullTotalPhys;
-    ram.used = ram.total - m.ullAvailPhys;
-  }
+    if (GetPhysicallyInstalledSystemMemory(&installedKB)) {
+        ram.total = installedKB * 1024;
+    }
+    if (GlobalMemoryStatusEx(&m)) {
+        if (ram.total == 0) ram.total = m.ullTotalPhys;
+        ram.used = ram.total - m.ullAvailPhys;
+    }
 
-  ram.total = round(ram.total / (1024.0 * 1024.0) * 100.0) / 100.0;
-  ram.used = round(ram.used / (1024.0 * 1024.0) * 100.0) / 100.0;
+    ram.total = round(ram.total / (1024.0 * 1024.0) * 100.0) / 100.0;
+    ram.used = round(ram.used / (1024.0 * 1024.0) * 100.0) / 100.0;
 
-  return ram;
+    return ram;
 }
 
 CPU WindowsCollector::GetCpu() {
-  CPU cpu = {};
-  SYSTEM_INFO sys_info;
-  GetSystemInfo(&sys_info);
-  cpu.cores = sys_info.dwNumberOfProcessors;
+    CPU cpu = {};
+    SYSTEM_INFO sys_info;
+    GetSystemInfo(&sys_info);
+    cpu.cores = sys_info.dwNumberOfProcessors;
 
-  double usage1 = GetCPUUsage();  // инициализация
-  Sleep(1000);
-  cpu.usage = GetCPUUsage();
-  cpu.usage = round(cpu.usage * 100.0) / 100.0;
-  return cpu;
+    double usage1 = GetCPUUsage();  // инициализация
+    Sleep(1000);
+    cpu.usage = GetCPUUsage();
+    cpu.usage = round(cpu.usage * 100.0) / 100.0;
+    return cpu;
 }
 
 string get_dns_fqdn_hostname() {
-  DWORD size = 0;
-  if (!GetComputerNameExA(ComputerNameDnsFullyQualified, nullptr, &size)) {
-    if (GetLastError() != ERROR_MORE_DATA) {
-      return "";
+    DWORD size = 0;
+    if (!GetComputerNameExA(ComputerNameDnsFullyQualified, nullptr, &size)) {
+        if (GetLastError() != ERROR_MORE_DATA) {
+            return "";
+        }
     }
-  }
 
-  string hostname(size, '\0');
-  if (GetComputerNameExA(ComputerNameDnsFullyQualified, &hostname[0], &size)) {
-    hostname.resize(size);
-    return hostname;
-  }
-  return "";
+    string hostname(size, '\0');
+    if (GetComputerNameExA(ComputerNameDnsFullyQualified, &hostname[0],
+                           &size)) {
+        hostname.resize(size);
+        return hostname;
+    }
+    return "";
 }
 
 OS WindowsCollector::GetOs() {
-  OS osys = {};
-  osys.hostname = get_dns_fqdn_hostname();
-  osys.domain = GetComputerDomainOrWorkgroup();
-  osys.version = GetOsVersionName();
+    OS osys = {};
+    osys.hostname = get_dns_fqdn_hostname();
+    osys.domain = GetComputerDomainOrWorkgroup();
+    osys.version = GetOsVersionName();
 
-  FILETIME time;
-  GetSystemTimeAsFileTime(&time);
-  ULARGE_INTEGER ull;
-  ull.LowPart = time.dwLowDateTime;
-  ull.HighPart = time.dwHighDateTime;
+    FILETIME time;
+    GetSystemTimeAsFileTime(&time);
+    ULARGE_INTEGER ull;
+    ull.LowPart = time.dwLowDateTime;
+    ull.HighPart = time.dwHighDateTime;
 
-  const ULONGLONG UNIX_EPOCH_DIFF = 116444736000000000ULL;
-  const ULONGLONG HUNDRED_NS_PER_SECOND = 10000000ULL;
-  ULONGLONG unixTime = (ull.QuadPart - UNIX_EPOCH_DIFF) / HUNDRED_NS_PER_SECOND;
-  osys.timestamp = static_cast<int>(unixTime);
+    const ULONGLONG UNIX_EPOCH_DIFF = 116444736000000000ULL;
+    const ULONGLONG HUNDRED_NS_PER_SECOND = 10000000ULL;
+    ULONGLONG unixTime =
+        (ull.QuadPart - UNIX_EPOCH_DIFF) / HUNDRED_NS_PER_SECOND;
+    osys.timestamp = static_cast<int>(unixTime);
 
-  return osys;
+    return osys;
 }
 
 Hardware WindowsCollector::GetHardware() {
-  Hardware hardware = {};
-  hardware.bios = GetBiosInfo();
-  hardware.cpu = GetCpuBrand();
-  hardware.mac = getMacAddresses();
-  hardware.video = GetVideoAdapters();
-  return hardware;
+    Hardware hardware = {};
+    hardware.bios = GetBiosInfo();
+    hardware.cpu = GetCpuBrand();
+    hardware.mac = getMacAddresses();
+    hardware.video = GetVideoAdapters();
+    return hardware;
 }
 
 int WindowsCollector::GetPing() {
-  DWORD avg = GetAveragePing(settings_.ip_server.c_str(), 4);
-  return (avg > 0) ? static_cast<int>(avg) : 0;
+    DWORD avg = GetAveragePing(settings_.ip_server.c_str(), 4);
+    return (avg > 0) ? static_cast<int>(avg) : 0;
 }
 
 Payload WindowsCollector::GetPayload() {
-  Payload payload = {};
-  payload.disks = GetDisks();
-  payload.ram = GetRam();
-  payload.cpu = GetCpu();
-  payload.system = GetOs();
-  payload.hardware = GetHardware();
-  payload.ping = GetPing();
-  return payload;
+    Payload payload = {};
+    payload.disks = GetDisks();
+    payload.usbs = GetUSBs();
+    payload.ram = GetRam();
+    payload.cpu = GetCpu();
+    payload.system = GetOs();
+    payload.hardware = GetHardware();
+    payload.ping = GetPing();
+    return payload;
 }

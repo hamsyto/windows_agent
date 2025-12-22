@@ -1,3 +1,6 @@
+#ifndef SCENARIOS_H
+#define SCENARIOS_H
+
 #pragma once
 
 #include <iostream>
@@ -16,3 +19,5 @@ void SendReport(Payload payload, IConnection* connection,
                 const Settings& settings);
 
 int Work(Settings& settings);
+
+#endif

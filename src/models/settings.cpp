@@ -11,115 +11,127 @@
 using namespace std;
 // path - путь
 bool Settings::validate() {
-  bool flag = true;
-  if (ip_server == "") {
-    flag = false;
-    cout << "EMPTY IP IN SETTINGS" << endl;
-  }
-  if (port_server < 128) {
-    flag = false;
-    cout << "INCORRECT SERVER PORT SETTINGS" << endl;
-  }
-  return flag;
+    bool flag = true;
+    if (ip_server == "") {
+        flag = false;
+        cout << "EMPTY IP IN SETTINGS" << endl;
+    }
+    if (port_server < 128) {
+        flag = false;
+        cout << "INCORRECT SERVER PORT SETTINGS" << endl;
+    }
+    return flag;
 }
-Settings LoadEnvSettings(string path) {
-  Settings settings = {};
 
-  unordered_map<string, string> env_map = ClearEnvFile(path);
+Settings LoadEnvSettings(const string path) {
+    Settings settings = {};
+    unordered_map<string, string> env_map = ClearEnvFile(path);
+    try {
+        settings.idle_time = stoi(env_map.at("IDLE_TIME"));
+        settings.ip_server = env_map.at("IP_SERVER");
+        settings.port_server = stoi(env_map.at("PORT_SERVER"));
+        settings.key = env_map.at("KEY");
+        settings.agent_id = stoi(env_map.at("AGENT_ID"));
+        settings.type = env_map.at("TYPE");
 
-  try {
-    settings.idle_time = stoi(env_map["IDLE_TIME"]);
-    settings.ip_server = env_map["IP_SERVER"];
-    settings.port_server = stoi(env_map["PORT_SERVER"]);
-    settings.agent_id = stoi(env_map["AGENT_ID"]);
-  } catch (const exception& e) {
-    cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
+        // Дополнительная валидация
+        // if (settings.ip_server == "") {
+        //     throw out_of_range("PORT_SERVER must be less than 128");
+        // }
+        // if (settings.port_server < 128) {
+        //     throw out_of_range("PORT_SERVER must be less than 128");
+        // }
+        // if (settings.agent_id <= 0) {
+        //     throw invalid_argument("AGENT_ID must be a positive number");
+        // }
+    } catch (const exception& e) {
+        cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
+        throw;
+    }
     return settings;
-  }
-  return settings;
 }
 
-unordered_map<string, string> ClearEnvFile(string path) {
-  ifstream file(path);  // ищет .env файл
-  if (!file.is_open()) {
-    cout << "Ошибка: не удалось открыть .env\n";
-    // return false;
-  }
-  unordered_map<string, string> env_map;
-  string line;
-  while (getline(file, line)) {
-    // Удаляем комментарии
-    size_t comment_pos = line.find('#');
-    if (comment_pos != string::npos) {
-      line = line.substr(0, comment_pos);
+unordered_map<string, string> ClearEnvFile(const string path) {
+    ifstream file(path);  // ищет .env файл
+    if (!file.is_open()) {
+        cout << "Ошибка: не удалось открыть .env\n";
+        // return false;
     }
+    unordered_map<string, string> env_map;
+    string line;
+    while (getline(file, line)) {
+        // Удаляем комментарии
+        size_t comment_pos = line.find('#');
+        if (comment_pos != string::npos) {
+            line = line.substr(0, comment_pos);
+        }
 
-    line = Trim(line);
-    if (line.empty()) continue;
+        line = Trim(line);
+        if (line.empty()) continue;
 
-    size_t eq_pos = line.find('=');
-    if (eq_pos == string::npos) continue;
+        size_t eq_pos = line.find('=');
+        if (eq_pos == string::npos) continue;
 
-    string key = Trim(line.substr(0, eq_pos));
-    string value = Trim(line.substr(eq_pos + 1));
+        string key = Trim(line.substr(0, eq_pos));
+        string value = Trim(line.substr(eq_pos + 1));
 
-    // Убираем кавычки, если есть (поддержка "value" и 'value')
-    if ((value.size() >= 2) &&
-        ((value.front() == '"' && value.back() == '"') ||
-         (value.front() == '\'' && value.back() == '\''))) {
-      value = value.substr(1, value.size() - 2);
+        // Убираем кавычки, если есть (поддержка "value" и 'value')
+        if ((value.size() >= 2) &&
+            ((value.front() == '"' && value.back() == '"') ||
+             (value.front() == '\'' && value.back() == '\''))) {
+            value = value.substr(1, value.size() - 2);
+        }
+
+        env_map[key] = value;
     }
-
-    env_map[key] = value;
-  }
-  file.close();
-  return env_map;
+    file.close();
+    return env_map;
 }
 
 string Trim(const string& str) {
-  size_t start = str.find_first_not_of(" \t\r\n");
-  if (start == string::npos) return "";
-  size_t end = str.find_last_not_of(" \t\r\n");
-  return str.substr(start, end - start + 1);
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == string::npos) return "";
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
 }
 
-bool UpdateAgentIdInEnv(const string& filename, int newId) {
-  ifstream inFile(filename);
-  if (!inFile.is_open()) {
-    cerr << "Не удалось открыть файл " << filename << " для чтения.\n";
-    return false;
-  }
-
-  vector<string> lines;
-  string line;
-  bool found = false;
-
-  while (getline(inFile, line)) {
-    if (line.find("AGENT_ID=") == 0) {
-      lines.push_back("AGENT_ID=" + to_string(newId));
-      found = true;
-    } else {
-      lines.push_back(line);
+bool UpdateAgentIdInEnv(const string path, int newId) {
+    ifstream inFile(path);
+    if (!inFile.is_open()) {
+        cerr << "Не удалось открыть файл " << path << " для чтения.\n";
+        return false;
     }
-  }
-  inFile.close();
 
-  // Если AGENT_ID не найден — ничего не записываем и не меняем файл
-  if (!found) {
-    cerr << "AGENT_ID не найден в файле " << filename << ".\n";
-    return false;
-  }
+    vector<string> lines;
+    string line;
+    bool found = false;
 
-  ofstream outFile(filename);
-  if (!outFile.is_open()) {
-    cerr << "Не удалось открыть файл " << filename << " для записи.\n";
-    return false;
-  }
+    while (getline(inFile, line)) {
+        if (line.find("AGENT_ID=") == 0) {
+            lines.push_back("AGENT_ID=" + to_string(newId));
+            found = true;
+        } else {
+            lines.push_back(line);
+        }
+    }
+    inFile.close();
 
-  for (const auto& l : lines) {
-    outFile << l << '\n';
-  }
-  outFile.close();
+    // Если AGENT_ID не найден — ничего не записываем и не меняем файл
+    if (!found) {
+        cerr << "AGENT_ID не найден в файле " << path << ".\n";
+        return false;
+    }
 
-  return true;
+    ofstream outFile(path);
+    if (!outFile.is_open()) {
+        cerr << "Не удалось открыть файл " << path << " для записи.\n";
+        return false;
+    }
+
+    for (const auto& l : lines) {
+        outFile << l << '\n';
+    }
+    outFile.close();
+
+    return true;
 }
