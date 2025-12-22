@@ -14,3 +14,5 @@ int Registrate(Payload payload, IConnection* connection,
 
 void SendReport(Payload payload, IConnection* connection,
                 const Settings& settings);
+
+int Work(Settings& settings);

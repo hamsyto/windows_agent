@@ -7,7 +7,7 @@
 using namespace std;
 using json = nlohmann::json;
 
-string Message::toJson(int intend = -1) const {
+string Message::toJson(int intend) const {
   json j;
 
   // Заголовок

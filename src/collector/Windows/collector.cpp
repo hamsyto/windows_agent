@@ -1,8 +1,10 @@
-// windows/WindowsCollector.cpp
+// windows/collector.cpp
+
 #include "collector.h"
 
-#include <VersionHelpers.h>
 #include <windows.h>
+// Windows API
+#include <VersionHelpers.h>
 #include <winioctl.h>
 
 #include <cmath>

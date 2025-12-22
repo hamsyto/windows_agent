@@ -36,7 +36,6 @@ Settings LoadEnvSettings(string path) {
     cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
     return settings;
   }
-  cout << settings.ip_server << ":" << settings.port_server << endl;
   return settings;
 }
 

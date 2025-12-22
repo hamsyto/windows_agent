@@ -2,8 +2,6 @@
 #ifndef message_H
 #define message_H
 
-#include <windows.h>
-
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -17,8 +15,12 @@ struct Disk {
 };
 
 struct USB {
-  double usage;
-  double total;
+  std::string vendor_id;  //  id производителя
+  std::string device_id;  //  id устройства
+  std::string name;       //  Название в операционной системе
+  std::string label;      //  Название у пользователя
+  std::string mount;      //  Точка монтирования
+  std::uint32_t total;    //  total
 };
 
 // объём оперативной памяти
@@ -56,6 +58,7 @@ struct Header {
   int agent_id;      // пока рандом или 1-3
   std::string type;  // SimplePCReport, whoami, error
 };
+
 struct Payload {
   std::string error_text;
   std::vector<Disk> disks;
@@ -66,6 +69,7 @@ struct Payload {
   Hardware hardware;
   int ping;
 };
+
 struct Message {
   Header header;
   Payload payload;

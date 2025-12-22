@@ -5,61 +5,42 @@
 #include "connection/connection_fabric.h"
 #include "consts.h"
 #include "scenarios/scenarios.h"
+#include "scenarios/tests.h"
 #include "transport/transport.h"
 
 using namespace std;
 
 bool Initialize() {
 #ifdef _WIN32
-    WSADATA wsData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsData) != 0) {
-        cout << "WSAStartup failed" << endl;
-        return false;
-    }
+  WSADATA wsData;
+  if (WSAStartup(MAKEWORD(2, 2), &wsData) != 0) {
+    cout << "WSAStartup failed" << endl;
+    return false;
+  }
 #endif
-    return true;
+  return true;
 }
 
 bool Shutdown() {
 #ifdef _WIN32
-    WSACleanup();
+  WSACleanup();
 #endif
-    return true;
+  return true;
 }
 
 int main() {
-    if (!Initialize()) return 1;
+  if (!Initialize()) return 1;
 
-    Settings settings = LoadEnvSettings(kEnvFile);
-    if (!settings.validate()) {
-        std::cerr << "Не удалось загрузить настройки.\n";
-        return 1;
-    }
+  Settings settings = LoadEnvSettings(kEnvFile);
+  if (!settings.validate()) {
+    std::cerr << "Не удалось загрузить настройки.\n";
+    return 1;
+  }
+  cout << settings.ip_server << ":" << settings.port_server << endl;
 
-    // connection и collector - это unique_ptr
-    auto connection = CreateConnection(settings);
-    auto collector = CreateCollector(settings);
-
-    // 1. Регистрация
-    if (settings.agent_id < 1) {
-        int newID =
-            Registrate(collector->GetPayload(), connection.get(), settings);
-        if (newID != -1) {
-            settings.agent_id = newID;
-            cout << "New Agent ID: " << settings.agent_id << endl;
-            UpdateAgentIdInEnv(".env", settings.agent_id);
-        } else {
-            return 1;
-        }
-    }
-
-    // 2. Цикл отчетов
-    while (true) {
-        SendReport(collector->GetPayload(), connection.get(), settings);
-        cout << "Report sent" << endl;
-        Sleep(settings.idle_time * 1000);
-    }
-
-    Shutdown();
-    return 0;
+  TestCollector(settings);
+  // TestConnection(settings);
+  // Work(settings);
+  Shutdown();
+  return 0;
 }

@@ -66,3 +66,28 @@ void SendReport(Payload payload, IConnection* connection,
   }
   connection->Disconnect();
 }
+
+int Work(Settings& settings) {
+  // connection и collector - это unique_ptr
+  auto connection = CreateConnection(settings);
+  auto collector = CreateCollector(settings);
+
+  // 1. Регистрация
+  if (settings.agent_id < 1) {
+    int newID = Registrate(collector->GetPayload(), connection.get(), settings);
+    if (newID != -1) {
+      settings.agent_id = newID;
+      cout << "New Agent ID: " << settings.agent_id << endl;
+      UpdateAgentIdInEnv(".env", settings.agent_id);
+    } else {
+      return 1;
+    }
+  }
+
+  // 2. Цикл отчетов
+  while (true) {
+    SendReport(collector->GetPayload(), connection.get(), settings);
+    cout << "Report sent" << endl;
+    Sleep(settings.idle_time * 1000);
+  }
+}

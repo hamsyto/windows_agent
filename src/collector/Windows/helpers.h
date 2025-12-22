@@ -17,7 +17,7 @@ uint64_t GetPhysicalDiskSize(int diskIndex);
 
 int GetPhysicalDiskIndexForDriveLetter(char letter);
 
-std::string GetMountGetUsedSpace(int targetDiskIndex, uint32_t& used);
+std::string GetMountGetUsedSpace(int targetDiskIndex, double& used);
 
 Disk FillDiskInfo(int& diskIndex, std::string& root);
 // Вспомогательная: определить тип диска (HDD/SSD)
