@@ -16,12 +16,12 @@ class WindowsCollector : public ICollector {
   CPU GetCpu() override;
   OS GetOs() override;
   Hardware GetHardware() override;
-  Ping GetPing() override;
+  int GetPing() override;
 
  public:
   explicit WindowsCollector(const Settings& settings);
   explicit WindowsCollector(Message& msg);
-  SimplePCReport GetPayload() override;
+  Payload GetPayload() override;
 };
 
 #endif  // WINDOWS_COLLECTOR_H

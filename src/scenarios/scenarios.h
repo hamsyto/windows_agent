@@ -9,8 +9,8 @@
 
 using namespace std;
 
-int Registrate(SimplePCReport payload, IConnection* connection,
+int Registrate(Payload payload, IConnection* connection,
                const Settings& settings);
 
-void SendReport(SimplePCReport payload, IConnection* connection,
+void SendReport(Payload payload, IConnection* connection,
                 const Settings& settings);

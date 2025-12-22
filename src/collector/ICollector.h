@@ -16,11 +16,11 @@ class ICollector {
   virtual CPU GetCpu() = 0;
   virtual OS GetOs() = 0;
   virtual Hardware GetHardware() = 0;
-  virtual Ping GetPing() = 0;
+  virtual int GetPing() = 0;
 
  public:
   virtual ~ICollector() = default;
-  virtual SimplePCReport GetPayload() = 0;
+  virtual Payload GetPayload() = 0;
 };
 
 std::unique_ptr<ICollector> CreateCollector(const Settings& settings);
