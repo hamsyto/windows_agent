@@ -1,7 +1,7 @@
 // helpers.h
 
-#ifndef collector_COLL_H
-#define collector_COLL_H
+#ifndef HELPERS_H
+#define HELPERS_H
 
 #include <Wbemidl.h>  // содержит объявление BSTR, IWbemLocator и т.д.
 
@@ -12,17 +12,22 @@
 #include "../../models/message.h"
 #include "../../models/settings.h"
 
-// Вспомогательная: получить общий размер физического диска
-uint64_t GetPhysicalDiskSize(int diskIndex);
-
+// общие для USB и Disks
+double GetTotalDisk(const std::string& root);
 int GetPhysicalDiskIndexForDriveLetter(char letter);
-
-std::string GetMountGetUsedSpace(int targetDiskIndex, double& used);
-
-Disk FillDiskInfo(int& diskIndex, std::string& root);
-// Вспомогательная: определить тип диска (HDD/SSD)
 std::string GetBusType(int diskIndex);
 
+// диски
+double GetUsedDisk(const std::string& root);
+Disk FillDiskInfo(int& diskIndex, std::string& root);
+
+// USB
+bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
+                      std::string& outDeviceId, std::string& outName);
+std::string GetVolumeLabel(const std::string& root);
+USB FillUSBInfo(const std::string& root, int diskIndex);
+
+// ОС
 std::string GetOsVersionName();
 std::string GetComputerDomainOrWorkgroup();
 double GetCPUUsage();
