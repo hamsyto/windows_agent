@@ -54,8 +54,8 @@ enum class MessageType {
 };
 
 struct Header {
-    uint32_t agent_id;  // пока рандом или 1-3
-    std::string type;   // SimplePCReport, whoami, error
+    int agent_id;      // пока рандом или 1-3
+    std::string type;  // SimplePCReport, whoami, error
 };
 struct SimplePCReport {
     std::string error_text;

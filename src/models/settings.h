@@ -7,11 +7,14 @@
 #include <unordered_map>
 
 struct Settings {
-    int idle_time;          // как часто отправлять данные (в секундах)
+    int idle_time = 0;      // как часто отправлять данные (в секундах)
     std::string ip_server;  // ip или dns адрес сервера куда отправлять
-    int port_server;        // port сервера
+    int port_server = 0;    // port сервера
     std::string key;        // Ключ для шифрования
     int agent_id = 0;
+    bool valid = false;
+
+    bool validate();
 };
 
 // УниверсФунк читает и чистит .env от комментариев и символов

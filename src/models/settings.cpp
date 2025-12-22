@@ -10,19 +10,33 @@
 
 using namespace std;
 // path - путь
+bool Settings::validate() {
+    if (ip_server == "") {
+        cout << "EMPTY IP IN SETTINGS";
+        return false;
+    }
+    if (port_server < 128) {
+        cout << "INCORRECT SERVER PORT SETTINGS";
+        return false;
+    }
+    return true;
+}
 Settings LoadEnvSettings(string path) {
     Settings settings = {};
+
     unordered_map<string, string> env_map = ClearEnvFile(path);
 
-    // Проверяем наличие всех нужных переменныхs
-    if (env_map.find("IDLE_TIME") == env_map.end() ||
-        env_map.find("IP_SERVER") == env_map.end() ||
-        env_map.find("PORT_SERVER") == env_map.end() ||
-        env_map.find("KEY") == env_map.end() ||
-        env_map.find("AGENT_ID") == env_map.end()) {
-        cout << "Ошибка: в .env отсутствуют обязательные переменные\n";
-        // return false;
-        // могу ли сделать переменную для хранения ошибки заполнения?
+    // Проверяем наличие всех обязательных переменных
+    const vector<string> required = {
+        "IDLE_TIME", "IP_SERVER", "PORT_SERVER", "KEY", "AGENT_ID",
+    };
+
+    for (const auto& var : required) {
+        if (env_map.find(var) == env_map.end()) {
+            cout << "Ошибка: в .env отсутствует обязательная переменная: "
+                 << var << "\n";
+            return settings;  // valid остаётся false
+        }
     }
 
     try {
@@ -33,9 +47,10 @@ Settings LoadEnvSettings(string path) {
         settings.agent_id = stoi(env_map["AGENT_ID"]);
     } catch (const exception& e) {
         cout << "Ошибка парсинга числа в .env: " << e.what() << endl;
-        // return false;
+        return settings;  // valid остаётся false
     }
-
+    cout << settings.ip_server << ":" << settings.port_server << endl;
+    settings.valid = true;
     return settings;
 }
 

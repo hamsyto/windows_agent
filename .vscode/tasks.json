@@ -53,8 +53,6 @@
                 "src\\main.cpp",
                 // Transport
                 "src\\transport\\transport.cpp",
-                "src\\transport\\compressor\\lz4_handler.cpp",
-                "src\\transport\\chiper\\chacha_handler.cpp",
                 // Models
                 "src\\models\\message.cpp",
                 "src\\models\\settings.cpp",

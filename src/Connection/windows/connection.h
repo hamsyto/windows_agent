@@ -9,21 +9,21 @@
 #include "../IConnection.h"
 
 class WindowsConnection : public IConnection {
- private:
-  Settings settings_;
-  SOCKET socket_ = INVALID_SOCKET;
+   private:
+    Settings settings_;
+    SOCKET socket_;
 
- public:
-  explicit WindowsConnection(const Settings& settings);
-  ~WindowsConnection();
+   public:
+    explicit WindowsConnection(const Settings& settings);
+    ~WindowsConnection();
 
-  bool Connect() override;
-  bool Disconnect() override;
-  void Send(const std::string& data) override;
-  std::vector<char> Recv(size_t maxBytes = 4096) override;
+    bool Connect() override;
+    bool Disconnect() override;
+    void Send(const std::string& data) override;
+    std::vector<char> Recv(size_t maxBytes = 4096) override;
 
-  // Вспомогательный метод (опционально)
-  SOCKET GetSocket() const { return socket_; }
+    // Вспомогательный метод (опционально)
+    SOCKET GetSocket() const { return socket_; }
 };
 
 #endif  // WINDOWS_CONNECTION_H

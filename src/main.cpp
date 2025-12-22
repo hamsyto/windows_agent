@@ -9,7 +9,7 @@
 
 using namespace std;
 
-bool InitIalize() {
+bool Initialize() {
 #ifdef _WIN32
     WSADATA wsData;
     if (WSAStartup(MAKEWORD(2, 2), &wsData) != 0) {
@@ -28,9 +28,13 @@ bool Shutdown() {
 }
 
 int main() {
-    if (!InitIalize()) return 1;
+    if (!Initialize()) return 1;
 
-    Settings settings = LoadEnvSettings(kFileName);
+    Settings settings = LoadEnvSettings(kEnvFile);
+    if (!settings.validate()) {
+        std::cerr << "Не удалось загрузить настройки.\n";
+        return 1;
+    }
 
     // connection и collector - это unique_ptr
     auto connection = CreateConnection(settings);
