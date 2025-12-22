@@ -1,10 +1,7 @@
-// transport/transport.h
-
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -21,19 +18,21 @@ class Transport {
   std::string RecvData();
 
  protected:
-  // Вспомогательные методы трансформации данных
+  // Вспомогательные методы
   std::string Compress(const std::string& data);
   std::string Encrypt(const std::string& data);
   std::string Decrypt(const std::string& encryptedData);
 
-  // Хеширование ключа (SHA256)
+  // Методы сериализации длины (Little/Big Endian independent)
+  std::string LenToSend(const std::string& data_str);
+  uint32_t BytesToLength(const std::vector<char>& headerData);
+
   std::vector<unsigned char> DeriveKey(const std::string& rawKey);
 
  private:
-  const Settings& m_settings;
-  IConnection& m_connection;
+  const Settings& settings_;
+  IConnection& connection_;
 
-  // Константы для протокола
   static constexpr size_t NONCE_SIZE = 12;
   static constexpr size_t TAG_SIZE = 16;
 };

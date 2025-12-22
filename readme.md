@@ -210,3 +210,5 @@ JSON size: 659 | Compressed size: 529
         закрыть соединение;
 
     }
+
+    JSONDecodeError('Expecting value: line 1 column 1 (char 0)'): message = RawAgentMessage(ip='127.0.0.1', nonce=b'', buffer=b'\x00\x00\x02\xf3{"header":{"agent_id":0,"type":"whoami"},"payload":{"cpu":{"cores":16,"usage":0.1},"disks":[{"mount":"C:\\\\","number":0,"total":353955.0,"type":"NVME","used":280393.86},{"mount":"O:\\\\","number":0,"total":575737.0,"type":"NVME","used":360154.17}],"hardware":{"bios":"INSYDE Corp. - V1.26","cpu":"13th Gen Intel(R) Core(TM) i7-13620H","mac":["00:FF:14:AA:BE:33","00:15:5D:7A:43:0F","00:15:5D:4E:EB:63","0A:00:27:00:00:12","C4:3D:1A:CE:C0:62","C6:3D:1A:CE:C0:61","00:FF:23:25:D8:F7","C4:3D:1A:CE:C0:61","74:D4:DD:21:11:A7"],"video":["NVIDIA GeForce RTX 4050 Laptop GPU","Intel(R) UHD Graphics"]},"ping":0,"ram":{"total":16384.0,"used":13921.13},"system":{"domain":"WORKGROUP","hostname":"Eve-work","timestamp":1766400671,"version":"Windows 11"},"usb":[]}}')
