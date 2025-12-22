@@ -4,65 +4,67 @@ using namespace std;
 
 int Registrate(SimplePCReport payload, IConnection* connection,
                const Settings& settings) {
-  if (!connection) return -1;
+    if (!connection) return -1;
 
-  try {
-    // 1. Инициализируем соединение, если оно еще не установлено
-    if (!connection->Connect()) {
-      cout << "Reg error: Could not establish connection to server" << endl;
-      return -1;
+    try {
+        // 1. Инициализируем соединение, если оно еще не установлено
+        if (!connection->Connect()) {
+            cout << "Reg error: Could not establish connection to server"
+                 << endl;
+            return -1;
+        }
+
+        Message message = {Header{settings.agent_id, "whoami"}, payload};
+        string json_message = message.toJson();
+
+        Transport transport(settings, *connection);
+
+        // 2. Отправка данных
+        transport.SendData(json_message);
+        // 3. Получение ID (4 байта)
+        string result_bytes = transport.RecvData();
+
+        if (result_bytes.size() != sizeof(int32_t)) {
+            cout << "Reg error: Invalid response size from server" << endl;
+            return -1;
+        }
+
+        int32_t network_id;
+        memcpy(&network_id, result_bytes.data(), sizeof(int32_t));
+        int host_id = static_cast<int>(ntohl(network_id));
+        connection->Disconnect();
+        return host_id;
+
+    } catch (const exception& e) {
+        cout << "Reg error: " << e.what() << endl;
+        connection->Disconnect();
+        return -1;
     }
-
-    Message message = {Header{settings.agentID, "whoami"}, payload};
-    string json_message = message.toJson();
-
-    Transport transport(settings, *connection);
-
-    // 2. Отправка данных
-    transport.SendData(json_message);
-    // 3. Получение ID (4 байта)
-    string result_bytes = transport.RecvData();
-
-    if (result_bytes.size() != sizeof(int32_t)) {
-      cout << "Reg error: Invalid response size from server" << endl;
-      return -1;
-    }
-
-    int32_t network_id;
-    memcpy(&network_id, result_bytes.data(), sizeof(int32_t));
-    int host_id = static_cast<int>(ntohl(network_id));
-    connection->Disconnect();
-    return host_id;
-
-  } catch (const exception& e) {
-    cout << "Reg error: " << e.what() << endl;
-    connection->Disconnect();
-    return -1;
-  }
 }
 
 void SendReport(SimplePCReport payload, IConnection* connection,
                 const Settings& settings) {
-  if (!connection) return;
+    if (!connection) return;
 
-  try {
-    // 1. Проверяем/устанавливаем соединение перед отправкой
-    if (!connection->Connect()) {
-      cout << "Send error: Server is unreachable" << endl;
-      return;
+    try {
+        // 1. Проверяем/устанавливаем соединение перед отправкой
+        if (!connection->Connect()) {
+            cout << "Send error: Server is unreachable" << endl;
+            return;
+        }
+
+        Message message = {Header{settings.agent_id, "SimplePCReport"},
+                           payload};
+        string json_message = message.toJson();
+
+        Transport transport(settings, *connection);
+        transport.SendData(json_message);
+
+        cout << "Report successfully sent for agent_id: " << settings.agent_id
+             << endl;
+
+    } catch (const exception& e) {
+        cout << "Send error: " << e.what() << endl;
     }
-
-    Message message = {Header{settings.agentID, "SimplePCReport"}, payload};
-    string json_message = message.toJson();
-
-    Transport transport(settings, *connection);
-    transport.SendData(json_message);
-
-    cout << "Report successfully sent for AgentID: " << settings.agentID
-         << endl;
-
-  } catch (const exception& e) {
-    cout << "Send error: " << e.what() << endl;
-  }
-  connection->Disconnect();
+    connection->Disconnect();
 }

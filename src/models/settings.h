@@ -7,11 +7,11 @@
 #include <unordered_map>
 
 struct Settings {
-  int idle_time;          // как часто отправлять данные (в секундах)
-  std::string ip_server;  // ip или dns адрес сервера куда отправлять
-  int port_server;        // port сервера
-  std::string key;        // Ключ для шифрования
-  uint8_t agentID = 0;
+    int idle_time;          // как часто отправлять данные (в секундах)
+    std::string ip_server;  // ip или dns адрес сервера куда отправлять
+    int port_server;        // port сервера
+    std::string key;        // Ключ для шифрования
+    int agent_id = 0;
 };
 
 // УниверсФунк читает и чистит .env от комментариев и символов
@@ -22,5 +22,7 @@ Settings LoadEnvSettings(std::string path);
 
 // Вспомогательная функция: обрезать пробелы по краям
 std::string Trim(const std::string& str);
+
+bool UpdateAgentIdInEnv(const std::string& filename, int newId);
 
 #endif
