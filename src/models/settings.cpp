@@ -31,7 +31,6 @@ Settings LoadEnvSettings(string path) {
     settings.idle_time = stoi(env_map["IDLE_TIME"]);
     settings.ip_server = env_map["IP_SERVER"];
     settings.port_server = stoi(env_map["PORT_SERVER"]);
-    settings.key = env_map["KEY"];
     settings.agent_id = stoi(env_map["AGENT_ID"]);
   } catch (const exception& e) {
     cout << "Ошибка парсинга числа в .env: " << e.what() << endl;

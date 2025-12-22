@@ -1,4 +1,5 @@
 // settings.h
+
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
@@ -7,14 +8,13 @@
 #include <unordered_map>
 
 struct Settings {
-    int idle_time = 0;      // как часто отправлять данные (в секундах)
-    std::string ip_server;  // ip или dns адрес сервера куда отправлять
-    int port_server = 0;    // port сервера
-    std::string key;        // Ключ для шифрования
-    int agent_id = 0;
-    bool valid = false;
+  int idle_time = 0;         // как часто отправлять данные (в секундах)
+  std::string ip_server;     // ip или dns адрес сервера куда отправлять
+  int port_server = 0;       // port сервера
+  int agent_id = 0;          // id агента
+  std::string key = "asdf";  // Ключ для шифрования
 
-    bool validate();
+  bool validate();
 };
 
 // УниверсФунк читает и чистит .env от комментариев и символов
