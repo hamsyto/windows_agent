@@ -17,7 +17,7 @@ string Message::toJson(int intend) const {
     if (header.type == "error") {
         j["payload"] = {{"error", payload.error_text}};
         return j.dump();
-    }
+    };
 
     j["payload"] = {
         {
@@ -43,7 +43,10 @@ string Message::toJson(int intend) const {
                 {"timestamp", payload.system.timestamp},
             },
         },
-        {"disks", json::array()},
+        {
+            "disks",
+            json::array(),
+        },
         {
             "hardware",
             {
@@ -54,7 +57,6 @@ string Message::toJson(int intend) const {
             },
         },
         {"ping", payload.ping},
-        {"usbs", json::array()},
     };
 
     for (const auto& disk : payload.disks) {
@@ -65,26 +67,29 @@ string Message::toJson(int intend) const {
             {"used", disk.used},
             {"type", disk.type},
         });
-    }
+    };
 
-    for (const auto& usbs : payload.usbs) {
-        j["payload"]["usbs"].push_back({
-            {"vendor_id", usbs.vendor_id},
-            {"device_id", usbs.device_id},
-            {"name", usbs.name},
-            {"label", usbs.label},
-            {"mount", usbs.mount},
-            {"total", usbs.total},
-        });
+    // добавляем usb только если они найдены
+    if (!payload.usbs.empty()) {
+        for (const auto& usb : payload.usbs) {
+            j["payload"]["usbs"].push_back({
+                {"vendor_id", usb.vendor_id},
+                {"device_id", usb.device_id},
+                {"name", usb.name},
+                {"label", usb.label},
+                {"mount", usb.mount},
+                {"total", usb.total},
+            });
+        }
     }
 
     for (const auto& mac : payload.hardware.mac) {
         j["payload"]["hardware"]["mac"].push_back(mac);
-    }
+    };
 
     for (const auto& video : payload.hardware.video) {
         j["payload"]["hardware"]["video"].push_back(video);
-    }
+    };
 
     return j.dump(intend);
 }

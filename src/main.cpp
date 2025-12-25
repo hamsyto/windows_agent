@@ -41,7 +41,6 @@ int main() {
     cout << settings.ip_server << ":" << settings.port_server << endl;
 
     if (settings.type == "test") {  // типа сценарий поведения
-        TestConnection(settings);
         TestCollector(settings);
     } else {
         Work(settings);
