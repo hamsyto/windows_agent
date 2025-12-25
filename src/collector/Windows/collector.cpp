@@ -43,14 +43,14 @@ vector<Disk> WindowsCollector::GetDisks() {
     return disks;
 }
 
-std::vector<USB> WindowsCollector::GetUSBs() {
-    std::vector<USB> usbs;
+vector<USB> WindowsCollector::GetUSBs() {
+    vector<USB> usbs;
     DWORD drives = GetLogicalDrives();
 
     for (char letter = 'A'; letter <= 'Z'; ++letter) {
         if (!(drives & (1U << (letter - 'A')))) continue;
 
-        std::string root = std::string(1, letter) + ":\\";
+        string root = string(1, letter) + ":\\";
         UINT driveType = GetDriveTypeA(root.c_str());
 
         // Только съёмные носители

@@ -4,6 +4,7 @@
 #define HELPERS_H
 
 #include <Wbemidl.h>  // содержит объявление BSTR, IWbemLocator и т.д.
+#include <setupapi.h>
 
 #include <string>
 #include <unordered_map>
@@ -22,11 +23,15 @@ double GetUsedDisk(const std::string& root);
 Disk FillDiskInfo(int& diskIndex, std::string& root);
 
 // USB
+// Вспомогательная функция для проверки родительских отношений
+bool DoesDeviceBelongToParent(HDEVINFO hChild, SP_DEVINFO_DATA* childData,
+                              HDEVINFO hParent, SP_DEVINFO_DATA* parentData);
+int GetPhysicalDiskIndexForDriveLetter(char driveLetter);
 bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
                       std::string& outDeviceId, std::string& outName);
+
 std::string GetVolumeLabel(const std::string& root);
 USB FillUSBInfo(const std::string& root, int diskIndex);
-
 // ОС
 std::string GetOsVersionName();
 std::string GetComputerDomainOrWorkgroup();

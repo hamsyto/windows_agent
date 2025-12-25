@@ -223,68 +223,168 @@ Disk FillDiskInfo(int& diskIndex, string& root) {
 
 // USB
 
-bool GetUsbDeviceInfo(char driveLetter, string& outVendorId,
-                      string& outDeviceId, string& outName) {
+bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
+                      std::string& outDeviceId, std::string& outName) {
+    if (!isalpha(driveLetter)) return false;
+
+    driveLetter = toupper(driveLetter);
+
     int diskIndex = GetPhysicalDiskIndexForDriveLetter(driveLetter);
     if (diskIndex < 0) return false;
 
-    HDEVINFO hDevInfo = SetupDiGetClassDevsA(&GUID_DEVCLASS_DISKDRIVE, nullptr,
-                                             nullptr, DIGCF_PRESENT);
+    // Более прямой подход через WMI-подобные методы
+    // Используем SetupDi для поиска USB устройств
+
+    HDEVINFO hDevInfo =
+        SetupDiGetClassDevsA(&GUID_DEVINTERFACE_DISK, nullptr, nullptr,
+                             DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     if (hDevInfo == INVALID_HANDLE_VALUE) return false;
 
-    SP_DEVINFO_DATA devInfo = {};
-    devInfo.cbSize = sizeof(SP_DEVINFO_DATA);
+    SP_DEVICE_INTERFACE_DATA interfaceData = {0};
+    interfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
 
     bool found = false;
-    for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devInfo); ++i) {
-        char instanceId[512] = {};
-        if (!SetupDiGetDeviceInstanceIdA(hDevInfo, &devInfo, instanceId,
+
+    for (DWORD i = 0; SetupDiEnumDeviceInterfaces(
+             hDevInfo, nullptr, &GUID_DEVINTERFACE_DISK, i, &interfaceData);
+         ++i) {
+        // Получаем детали интерфейса
+        DWORD requiredSize = 0;
+        SetupDiGetDeviceInterfaceDetailA(hDevInfo, &interfaceData, nullptr, 0,
+                                         &requiredSize, nullptr);
+
+        if (requiredSize == 0) continue;
+
+        std::vector<BYTE> detailBuffer(requiredSize, 0);
+        auto* detailData = reinterpret_cast<PSP_DEVICE_INTERFACE_DETAIL_DATA_A>(
+            detailBuffer.data());
+        detailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
+
+        SP_DEVINFO_DATA devInfoData = {0};
+        devInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+        if (!SetupDiGetDeviceInterfaceDetailA(hDevInfo, &interfaceData,
+                                              detailData, requiredSize, nullptr,
+                                              &devInfoData))
+            continue;
+
+        // Проверяем, соответствует ли это устройство нашему диску
+        char physPath[MAX_PATH];
+        snprintf(physPath, sizeof(physPath), "\\\\.\\PhysicalDrive%d",
+                 diskIndex);
+
+        HANDLE hPhys = CreateFileA(
+            physPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+        if (hPhys == INVALID_HANDLE_VALUE) continue;
+
+        STORAGE_DEVICE_NUMBER sdn = {0};
+        DWORD bytesReturned = 0;
+
+        bool isOurDevice = false;
+        if (DeviceIoControl(hPhys, IOCTL_STORAGE_GET_DEVICE_NUMBER, nullptr, 0,
+                            &sdn, sizeof(sdn), &bytesReturned, nullptr)) {
+            if (sdn.DeviceNumber == static_cast<ULONG>(diskIndex))
+                isOurDevice = true;
+        }
+
+        CloseHandle(hPhys);
+
+        if (!isOurDevice) continue;
+
+        // Получаем Instance ID устройства
+        char instanceId[512] = {0};
+        if (!SetupDiGetDeviceInstanceIdA(hDevInfo, &devInfoData, instanceId,
                                          sizeof(instanceId), nullptr))
             continue;
 
-        // 🔹 Только USB-устройства
-        if (strncmp(instanceId, "USB\\", 4) != 0) continue;
+        // Проверяем, является ли устройство USB
+        bool isUSB = (strstr(instanceId, "USBSTOR") != nullptr) ||
+                     (strstr(instanceId, "USB") != nullptr);
 
-        char* vid = strstr(instanceId, "VID_");
-        char* pid = strstr(instanceId, "PID_");
-        if (!vid || !pid) continue;
+        if (!isUSB) continue;
 
-        // 🔹 Получаем дружелюбное имя
-        char friendlyName[512] = {};
-        if (!SetupDiGetDeviceRegistryPropertyA(
-                hDevInfo, &devInfo, SPDRP_FRIENDLYNAME, nullptr,
-                (PBYTE)friendlyName, sizeof(friendlyName), nullptr)) {
-            // fallback: используем часть Instance ID
-            strncpy(friendlyName, vid, sizeof(friendlyName) - 1);
-            friendlyName[sizeof(friendlyName) - 1] = '\0';
-        }
+        // Ищем Hardware ID родительского устройства
+        char hardwareIds[4096] = {0};
+        DWORD regDataType = 0;
 
-        // 🔹 Сверяем DeviceNumber с нашим diskIndex
-        char physPath[64];
-        snprintf(physPath, sizeof(physPath), "\\\\.\\PhysicalDrive%d",
-                 diskIndex);
-        HANDLE hPhys =
-            CreateFileA(physPath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        nullptr, OPEN_EXISTING, 0, nullptr);
-        if (hPhys == INVALID_HANDLE_VALUE) continue;
+        if (SetupDiGetDeviceRegistryPropertyA(
+                hDevInfo, &devInfoData, SPDRP_HARDWAREID, &regDataType,
+                reinterpret_cast<PBYTE>(hardwareIds), sizeof(hardwareIds),
+                nullptr)) {
+            // Ищем VID и PID в Hardware IDs
+            char* current = hardwareIds;
+            while (current && *current) {
+                char* vidPtr = strstr(current, "VID_");
+                char* pidPtr = strstr(current, "PID_");
 
-        STORAGE_DEVICE_NUMBER devNum = {};
-        DWORD bytes = 0;
-        if (DeviceIoControl(hPhys, IOCTL_STORAGE_GET_DEVICE_NUMBER, nullptr, 0,
-                            &devNum, sizeof(devNum), &bytes, nullptr)) {
-            if (static_cast<int>(devNum.DeviceNumber) == diskIndex) {
-                outVendorId = string(vid, 8);  // "VID_XXXX"
-                outDeviceId = string(pid, 8);  // "PID_XXXX"
-                outName = string(friendlyName);
-                found = true;
+                if (vidPtr && pidPtr && (vidPtr < pidPtr)) {
+                    // Извлекаем VID
+                    const char* vidStart = vidPtr + 4;
+                    const char* vidEnd = vidStart;
+                    while (*vidEnd && *vidEnd != '&' && *vidEnd != '\\')
+                        vidEnd++;
+
+                    // Извлекаем PID
+                    const char* pidStart = pidPtr + 4;
+                    const char* pidEnd = pidStart;
+                    while (*pidEnd && *pidEnd != '&' && *pidEnd != '\\')
+                        pidEnd++;
+
+                    if (vidStart < vidEnd && pidStart < pidEnd) {
+                        outVendorId = std::string(vidStart, vidEnd - vidStart);
+                        outDeviceId = std::string(pidStart, pidEnd - pidStart);
+                        break;
+                    }
+                }
+                current += strlen(current) + 1;
             }
         }
-        CloseHandle(hPhys);
-        if (found) break;
+
+        // Получаем дружественное имя
+        char friendlyName[512] = {0};
+        if (!SetupDiGetDeviceRegistryPropertyA(
+                hDevInfo, &devInfoData, SPDRP_FRIENDLYNAME, nullptr,
+                reinterpret_cast<PBYTE>(friendlyName), sizeof(friendlyName),
+                nullptr)) {
+            // Пробуем получить описание устройства
+            SetupDiGetDeviceRegistryPropertyA(
+                hDevInfo, &devInfoData, SPDRP_DEVICEDESC, nullptr,
+                reinterpret_cast<PBYTE>(friendlyName), sizeof(friendlyName),
+                nullptr);
+        }
+
+        outName = friendlyName;
+        found = true;
+        break;
     }
 
     SetupDiDestroyDeviceInfoList(hDevInfo);
+
+    // Если не нашли VID/PID, но устройство USB, возвращаем хотя бы имя
+    if (found && outVendorId.empty()) {
+        outVendorId = "USB";
+        outDeviceId = "STORAGE";
+    }
+
     return found;
+}
+
+// Вспомогательная функция для проверки родительских отношений
+bool DoesDeviceBelongToParent(HDEVINFO hChild, SP_DEVINFO_DATA* childData,
+                              HDEVINFO hParent, SP_DEVINFO_DATA* parentData) {
+    char childId[512], parentId[512];
+
+    if (!SetupDiGetDeviceInstanceIdA(hChild, childData, childId,
+                                     sizeof(childId), nullptr) ||
+        !SetupDiGetDeviceInstanceIdA(hParent, parentData, parentId,
+                                     sizeof(parentId), nullptr))
+        return false;
+
+    // Проверяем, содержит ли childId parentId как префикс
+    size_t parentLen = strlen(parentId);
+    return (strncmp(childId, parentId, parentLen) == 0);
 }
 
 string GetVolumeLabel(const string& root) {
@@ -296,27 +396,27 @@ string GetVolumeLabel(const string& root) {
     return "";  // без метки
 }
 
-USB FillUSBInfo(const string& root, int diskIndex) {
-    USB usbs = {};
-    usbs.mount = root;
+USB FillUSBInfo(const std::string& root, int diskIndex) {
+    USB usb = {};
+    usb.mount = root;
 
     char driveLetter = root.empty() ? '\0' : root[0];
 
     string vendorId, deviceId, name;
     if (GetUsbDeviceInfo(driveLetter, vendorId, deviceId, name)) {
-        usbs.vendor_id = vendorId;
-        usbs.device_id = deviceId;
-        usbs.name = name;
+        usb.device_id = deviceId;
+        usb.vendor_id = vendorId;
+        usb.name = name;
     } else {
-        usbs.vendor_id = "UNKNOWN";
-        usbs.device_id = "UNKNOWN";
-        usbs.name = "Unknown USB Device";
+        usb.vendor_id = "UNKNOWN";
+        usb.device_id = "UNKNOWN";
+        usb.name = "Unknown USB Device";
     }
 
-    usbs.label = GetVolumeLabel(root);
-    usbs.total = static_cast<uint32_t>(GetTotalDisk(root));
+    usb.label = GetVolumeLabel(root);
+    usb.total = static_cast<uint32_t>(GetTotalDisk(root));
 
-    return usbs;
+    return usb;
 }
 
 // ОС
