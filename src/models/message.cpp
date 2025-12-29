@@ -70,12 +70,14 @@ string Message::toJson(int intend) const {
     };
 
     // добавляем usb только если они найдены
-    if (!payload.usbs.empty()) {
-        for (const auto& usb : payload.usbs) {
-            j["payload"]["usbs"].push_back({
-                {"vendor_id", usb.vendor_id},
-                {"device_id", usb.device_id},
+    if (!payload.usb.empty()) {
+        for (const auto& usb : payload.usb) {
+            j["payload"]["usb"].push_back({
                 {"name", usb.name},
+                {"description", usb.description},
+                {"sn", usb.sn},
+                {"vendor_id", usb.vendor_id},
+                {"product_id", usb.product_id},
                 {"label", usb.label},
                 {"mount", usb.mount},
                 {"total", usb.total},

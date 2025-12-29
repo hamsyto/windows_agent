@@ -42,6 +42,7 @@ int main() {
 
     if (settings.type == "test") {  // типа сценарий поведения
         TestCollector(settings);
+        system("Pause");
     } else {
         Work(settings);
     }

@@ -8,19 +8,21 @@
 
 struct Disk {
     uint8_t number;     // номер физического диска
-    std::string mount;  // каталог, типа логический диск
+    std::string mount;  // каталог (типа логический диск)
     std::string type;   // Тип шины
     double total;       // Megabytes
     double used;        // Megabytes
 };
 
 struct USB {
-    std::string vendor_id;  //  id производителя
-    std::string device_id;  //  id устройства
-    std::string name;       //  Название в операционной системе
-    std::string label;      //  Название у пользователя
-    std::string mount;      //  Точка монтирования
-    std::uint32_t total;    //  total
+    std::string name;         //  Название в операционной системе
+    std::string description;  //
+    std::string sn;           //  Serial Number
+    std::string vendor_id;    //  идентификатор производителя
+    std::string product_id;   //  идентификатор продукта
+    std::string label;        //  Название у пользователя
+    std::string mount;        //  Точка монтирования
+    std::uint32_t total;      //  total
 };
 
 // объём оперативной памяти
@@ -63,7 +65,7 @@ struct Header {
 struct Payload {
     std::string error_text;
     std::vector<Disk> disks;
-    std::vector<USB> usbs;
+    std::vector<USB> usb;
     RAM ram;
     CPU cpu;
     OS system;

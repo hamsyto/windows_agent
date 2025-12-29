@@ -227,22 +227,45 @@ Disk FillDiskInfo(int& diskIndex, string& root) {
 }
 
 // USB
-// Вспомогательная функция: извлекает VID из DeviceInstanceId
-std::string ExtractVendorId(const std::string& deviceId) {
-    size_t pos = deviceId.find("VID_");
+
+// Вспомогательная функция: извлекает VID или PID из DeviceInstanceId
+std::string ExtractId(const std::string& deviceId, const std::string typeID) {
+    size_t pos = deviceId.find(typeID);
     if (pos == std::string::npos) return "UNKNOWN";
     pos += 4;
     size_t end = deviceId.find_first_not_of("0123456789ABCDEF", pos);
     if (end == std::string::npos) end = deviceId.size();
-    std::string vid = deviceId.substr(pos, end - pos);
-    if (vid.size() != 4) return "UNKNOWN";
-    std::transform(vid.begin(), vid.end(), vid.begin(), ::toupper);
-    return vid;
+    std::string id = deviceId.substr(pos, end - pos);
+    if (id.size() != 4) return "UNKNOWN";
+    std::transform(id.begin(), id.end(), id.begin(), ::toupper);
+    return id;
+}
+
+// Возвращает SerialNumber из результата SetupDiEnumDeviceInfo()
+std::string ExtractSerialFromUsbStor(const std::string& input) {
+    // Ищем последнюю часть после последнего '\\'
+    size_t lastBackslash = input.find_last_of('\\');
+    if (lastBackslash == std::string::npos) {
+        return "";  // некорректный формат
+    }
+
+    std::string afterBackslash = input.substr(lastBackslash + 1);
+
+    // Ищем первый '&' в этой части
+    size_t firstAmpersand = afterBackslash.find('&');
+    if (firstAmpersand == std::string::npos) {
+        // Если '&' нет, возвращаем всю строку после '\\'
+        return afterBackslash;
+    }
+
+    // Возвращаем часть до первого '&'
+    return afterBackslash.substr(0, firstAmpersand);
 }
 
 // Основная функция
-bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
-                      std::string& outDeviceId, std::string& outName) {
+bool GetUsbDeviceInfo(char driveLetter, std::string& sn,
+                      std::string& out_vendor_id, std::string& out_product_id,
+                      std::string& outDeviceId, std::string& outDescription) {
     if (driveLetter == '\0') return false;
 
     // === ШАГ 1: Получить DeviceNumber целевого тома ===
@@ -286,7 +309,8 @@ bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
             CR_SUCCESS)
             continue;
 
-        if (std::string(parentId).find("USB\\VID_") == std::string::npos)
+        if (std::string(parentId).find("USB\\VID_") == std::string::npos &&
+            std::string(parentId).find("PID_") == std::string::npos)
             continue;
 
         // Получаем имя
@@ -312,6 +336,7 @@ bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
                                     (LPBYTE)&devNumber, &size);
         RegCloseKey(hKey);
 
+        // // проверка из-за которой всё херится
         // if (res != ERROR_SUCCESS) {
         //     // Например, выведите в консоль или через OutputDebugStringA
         //     printf("RegQueryValueExA failed: %lu\n", res);
@@ -328,6 +353,8 @@ bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
         //     break;
         // }
 
+        // deviceId =
+        // USBSTOR\\DISK&VEN_VENDORCO&PROD_PRODUCTCODE&REV_2.00\\8932371065828134618&0
         deviceId = id;
         friendlyName = name;
         found = true;
@@ -337,26 +364,15 @@ bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
     SetupDiDestroyDeviceInfoList(hDevInfo);
     if (!found) return false;
 
+    // нужно обрезать
+    // USBSTOR\\DISK&VEN_VENDORCO&PROD_PRODUCTCODE&REV_2.00\\8932371065828134618&0
+    // чтобы sn = 8932371065828134618
     outDeviceId = deviceId;
-    outVendorId = ExtractVendorId(parentId);
-    outName = friendlyName;
+    sn = ExtractSerialFromUsbStor(outDeviceId);
+    out_vendor_id = ExtractId(parentId, "VID_");
+    out_product_id = ExtractId(parentId, "PID_");
+    outDescription = friendlyName;
     return true;
-}
-
-// Вспомогательная функция для проверки родительских отношений
-bool DoesDeviceBelongToParent(HDEVINFO hChild, SP_DEVINFO_DATA* childData,
-                              HDEVINFO hParent, SP_DEVINFO_DATA* parentData) {
-    char childId[512], parentId[512];
-
-    if (!SetupDiGetDeviceInstanceIdA(hChild, childData, childId,
-                                     sizeof(childId), nullptr) ||
-        !SetupDiGetDeviceInstanceIdA(hParent, parentData, parentId,
-                                     sizeof(parentId), nullptr))
-        return false;
-
-    // Проверяем, содержит ли childId parentId как префикс
-    size_t parentLen = strlen(parentId);
-    return (strncmp(childId, parentId, parentLen) == 0);
 }
 
 string GetVolumeLabel(const string& root) {
@@ -374,14 +390,17 @@ USB FillUSBInfo(const std::string& root, int diskIndex) {
 
     char driveLetter = root.empty() ? '\0' : root[0];
 
-    string vendorId, deviceId, name;
-    if (GetUsbDeviceInfo(driveLetter, vendorId, deviceId, name)) {
-        usb.device_id = deviceId;
+    string vendorId, sn, productId, deviceId, name, description;
+    if (GetUsbDeviceInfo(driveLetter, sn, vendorId, productId, deviceId,
+                         description)) {
+        usb.description = description;
+        usb.sn = sn;
         usb.vendor_id = vendorId;
-        usb.name = name;
+        usb.product_id = productId;
+        usb.name = "";
     } else {
         usb.vendor_id = "UNKNOWN";
-        usb.device_id = "UNKNOWN";
+        usb.sn = "UNKNOWN";
         usb.name = "Unknown USB Device";
     }
 

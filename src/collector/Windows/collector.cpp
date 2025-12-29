@@ -44,7 +44,7 @@ vector<Disk> WindowsCollector::GetDisks() {
 }
 
 vector<USB> WindowsCollector::GetUSBs() {
-    vector<USB> usbs;
+    vector<USB> usb;
     DWORD drives = GetLogicalDrives();
 
     for (char letter = 'A'; letter <= 'Z'; ++letter) {
@@ -64,9 +64,9 @@ vector<USB> WindowsCollector::GetUSBs() {
 
         auto info = FillUSBInfo(root, diskIndex);
 
-        usbs.push_back(info);
+        usb.push_back(info);
     }
-    return usbs;
+    return usb;
 }
 
 RAM WindowsCollector::GetRam() {
@@ -157,7 +157,7 @@ int WindowsCollector::GetPing() {
 Payload WindowsCollector::GetPayload() {
     Payload payload = {};
     payload.disks = GetDisks();
-    payload.usbs = GetUSBs();
+    payload.usb = GetUSBs();
     payload.ram = GetRam();
     payload.cpu = GetCpu();
     payload.system = GetOs();
