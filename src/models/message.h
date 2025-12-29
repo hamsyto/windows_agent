@@ -7,11 +7,11 @@
 #include <vector>
 
 struct Disk {
-    uint8_t number;  // номер физического диска
-    std::string mount;
-    std::string type;  // Тип шины
-    double total;      // Megabytes
-    double used;       // Megabytes
+    uint8_t number;     // номер физического диска
+    std::string mount;  // каталог, типа логический диск
+    std::string type;   // Тип шины
+    double total;       // Megabytes
+    double used;        // Megabytes
 };
 
 struct USB {
@@ -29,16 +29,17 @@ struct RAM {
     double used = 0;   // Megabytes
 };
 
+// о процессоре
 struct CPU {
     int cores;     // Потоки
     double usage;  // Использование 0 - 1
 };
 
 struct OS {
-    std::string hostname;
-    std::string domain;  // WORKGROUP
-    std::string version;
-    int timestamp;  // время в формате timestamp
+    std::string hostname;  //
+    std::string domain;    // WORKGROUP
+    std::string version;   //
+    int timestamp;         // время в формате timestamp
 };
 
 struct Hardware {

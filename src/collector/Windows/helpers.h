@@ -24,11 +24,14 @@ Disk FillDiskInfo(int& diskIndex, std::string& root);
 
 // USB
 // Вспомогательная функция для проверки родительских отношений
+// Вспомогательная функция: извлекает VID из DeviceInstanceId
+std::string ExtractVendorId(const std::string& deviceId);
+// Основная функция
+bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
+                      std::string& outDeviceId, std::string& outName);
 bool DoesDeviceBelongToParent(HDEVINFO hChild, SP_DEVINFO_DATA* childData,
                               HDEVINFO hParent, SP_DEVINFO_DATA* parentData);
 int GetPhysicalDiskIndexForDriveLetter(char driveLetter);
-bool GetUsbDeviceInfo(char driveLetter, std::string& outVendorId,
-                      std::string& outDeviceId, std::string& outName);
 
 std::string GetVolumeLabel(const std::string& root);
 USB FillUSBInfo(const std::string& root, int diskIndex);
